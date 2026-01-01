@@ -1,0 +1,49 @@
+# Makefile for Compiling BOFs
+# Example makefile for building Beacon Object Files
+
+# Paths
+MINGW_HOME = C:\Tools\mingw64
+BEACON_HOME = C:\Tools\cobaltstrike
+
+# Compiler settings
+CC = $(MINGW_HOME)\bin\gcc.exe
+CFLAGS = -c -DBOF -Os -fno-asynchronous-unwind-tables -nostdlib -fno-ident -fpack-struct=8 -falign-functions=1 -Wall
+LD = $(MINGW_HOME)\bin\ld.exe
+LDFLAGS = -s -m i386pe --subsystem=windows --stack=0x100000
+
+# Directories
+SRC_DIR = .
+INCLUDE_DIR = ../include
+OBJ_DIR = obj
+BUILD_DIR = bin
+
+.PHONY: all clean directories
+
+all: directories monitor_logon.o
+
+directories:
+	@if not exist $(OBJ_DIR) mkdir $(OBJ_DIR)
+	@if not exist $(BUILD_DIR) mkdir $(BUILD_DIR)
+
+# Compile BOF
+monitor_logon.o: $(SRC_DIR)/monitor_logon.c
+	@echo Compiling monitor_logon.c...
+	@$(CC) $(CFLAGS) -I$(INCLUDE_DIR) -o $(OBJ_DIR)\monitor_logon.o $(SRC_DIR)\monitor_logon.c
+	@copy $(OBJ_DIR)\monitor_logon.o $(BUILD_DIR)\monitor_logon.o
+	@echo Built: $(BUILD_DIR)\monitor_logon.o
+
+clean:
+	@if exist $(OBJ_DIR) rmdir /s /q $(OBJ_DIR)
+	@if exist $(BUILD_DIR) rmdir /s /q $(BUILD_DIR)
+	@echo Cleaned build artifacts
+
+help:
+	@echo Async BOF Build System
+	@echo.
+	@echo Targets:
+	@echo   all         - Build all BOFs
+	@echo   clean       - Clean build artifacts
+	@echo   directories - Create build directories
+	@echo.
+	@echo Example:
+	@echo   make -f Makefile.bof all

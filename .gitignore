@@ -1,0 +1,235 @@
+build/
+bin/
+obj/
+out/
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+
+# Compiled DLL and Executables
+*.dll
+*.exe
+*.exp
+*.lib
+
+# BOF compiled files
+*.bof
+*.o
+
+# =============================================================================
+# Debug Files
+# =============================================================================
+
+# Debug symbols
+*.pdb
+*.ilk
+*.idb
+
+# Debug databases
+*.VC.db
+*.VC.opendb
+
+# =============================================================================
+# Visual Studio / MSVC
+# =============================================================================
+
+# Visual Studio cache/options directory
+.vs/
+.vscode/
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]uild/
+[Bb]in/
+
+# Visual Studio profiler
+*.psess
+*.vsp
+*.vspx
+*.sap
+
+# ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# =============================================================================
+# GCC / MinGW
+# =============================================================================
+
+# GCC coverage files
+*.gcda
+*.gcno
+*.gcov
+
+# =============================================================================
+# CMake
+# =============================================================================
+
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+
+# =============================================================================
+# IDE Files
+# =============================================================================
+
+# VS Code
+.vscode/
+
+# JetBrains IDEs (CLion, IntelliJ, etc.)
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+Session.vim
+.netrwhist
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+auto-save-list
+tramp
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# =============================================================================
+# Temporary Files
+# =============================================================================
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.bak
+*.backup
+*.swp
+*.swo
+
+# =============================================================================
+# Test & Coverage
+# =============================================================================
+
+# Test results
+test_results/
+coverage/
+*.cover
+.hypothesis/
+
+# =============================================================================
+# Documentation
+# =============================================================================
+
+# Generated documentation (keep source)
+docs/_build/
+docs/html/
+docs/latex/
+/doxygen/
+
+# =============================================================================
+# Package Manager
+# =============================================================================
+
+# NuGet
+packages/
+*.nupkg
+**/packages/*
+!**/packages/build/
+
+# =============================================================================
+# OS Generated Files
+# =============================================================================
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+.directory
+.Trash-*
+
+# =============================================================================
+# Project Specific
+# =============================================================================
+
+# Local configuration (if any)
+config.local.h
+local_config.h
+
+# Test binaries (keep source)
+test/bin/
+test/build/
+
+# Example outputs (keep source)
+examples/output/
+examples/*.bof
+examples/*.o
+
+# =============================================================================
+# Security / Keys
+# =============================================================================
+
+# Private keys, certificates, etc.
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+credentials/
+
+# =============================================================================
+# Archive Files
+# =============================================================================
+
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+
+# =============================================================================
+# BUT KEEP (Exceptions)
+# =============================================================================
+
+# Uncomment these if you want to track them
+#!.vscode/tasks.json
+#!.vscode/launch.json
+#!Makefile.example

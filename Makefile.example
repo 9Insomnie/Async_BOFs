@@ -1,0 +1,51 @@
+# Makefile for Async BOF Project
+# This is an example makefile for building the implant components
+
+CC = gcc
+CFLAGS = -Wall -Wextra -O2 -fPIC -DUNICODE -D_UNICODE
+LDFLAGS = -shared -lkernel32 -lntdll
+
+# Directories
+SRC_DIR = src
+INCLUDE_DIR = include
+BUILD_DIR = build
+OBJ_DIR = $(BUILD_DIR)/obj
+
+# Object files
+IMPLANT_OBJ = $(OBJ_DIR)/async_bof_implant.o
+COFF_PATCH_OBJ = $(OBJ_DIR)/coff_patch.o
+OPSEC_OBJ = $(OBJ_DIR)/opsec_optimizations.o
+
+# Output
+ASYNC_BOF_DLL = $(BUILD_DIR)/async_bof.dll
+
+.PHONY: all clean directories
+
+all: directories $(ASYNC_BOF_DLL)
+
+directories:
+	@mkdir -p $(OBJ_DIR)
+	@mkdir -p $(BUILD_DIR)
+
+$(ASYNC_BOF_DLL): $(IMPLANT_OBJ) $(COFF_PATCH_OBJ) $(OPSEC_OBJ)
+	$(CC) $(LDFLAGS) -o $@ $^
+	@echo "Built: $(ASYNC_BOF_DLL)"
+
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	$(CC) $(CFLAGS) -I$(INCLUDE_DIR) -c $< -o $@
+
+clean:
+	rm -rf $(BUILD_DIR)
+	@echo "Cleaned build artifacts"
+
+# Install to beacon directory (customize path)
+install: all
+	@echo "Installing async BOF components..."
+	@cp $(ASYNC_BOF_DLL) /path/to/beacon/
+	@cp $(INCLUDE_DIR)/async_bof.h /path/to/bof/include/
+	@echo "Installation complete"
+
+# Example: Build a test BOF
+test_bof: all
+	@echo "Building test BOF..."
+	@cd examples && make -f Makefile.bof
