@@ -22,9 +22,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Add MSBuild to PATH
-        uses: microsoft/setup-msbuild@v2
-
       - name: Setup Visual Studio dev environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -32,5 +29,11 @@ jobs:
 
       - name: Build ${{ matrix.config }} ${{ matrix.arch }}
         run: |
-          if "${{ matrix.config }}"=="Debug" (nmake /A all-debug) else (nmake /A all)
+          if "${{ matrix.config }}"=="Debug" (
+            nmake /A all-debug
+          ) else (
+            nmake /A all
+            nmake /A async-coff
+            nmake /A example-coff
+          )
         shell: cmd
