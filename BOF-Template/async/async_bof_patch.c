@@ -14,7 +14,7 @@ PCOFF_SECTION async_coff_get_section(PBYTE pCoffData, DWORD dwCoffSize, DWORD dw
         return NULL;
     }
 
-    PCOFF_HEADER pHeader = (PCFF_HEADER)pCoffData;
+    PCOFF_HEADER pHeader = (PCOFF_HEADER)pCoffData;
     DWORD dwSectionCount = pHeader->NumberOfSections;
 
     if (dwSectionIndex >= dwSectionCount) {
@@ -39,13 +39,13 @@ PCOFF_SECTION async_coff_find_section(PBYTE pCoffData, DWORD dwCoffSize, PCSTR p
         return NULL;
     }
 
-    PCFF_HEADER pHeader = (PCOFF_HEADER)pCoffData;
+    PCOFF_HEADER pHeader = (PCOFF_HEADER)pCoffData;
     DWORD dwSectionCount = pHeader->NumberOfSections;
     DWORD dwOptHeaderSize = pHeader->SizeOfOptionalHeader;
     PBYTE pSectionTable = pCoffData + sizeof(COFF_HEADER) + dwOptHeaderSize;
 
     for (DWORD i = 0; i < dwSectionCount; i++) {
-        PCFF_SECTION pSection = (PCFF_SECTION)(pSectionTable + i * sizeof(COFF_SECTION));
+        PCOFF_SECTION pSection = (PCOFF_SECTION)(pSectionTable + i * sizeof(COFF_SECTION));
         if (strncmp(pSection->Name, pszSectionName, 8) == 0) {
             return pSection;
         }
@@ -59,7 +59,7 @@ PCOFF_SECTION async_coff_get_sections(PBYTE pCoffData, DWORD dwCoffSize, PDWORD 
         return NULL;
     }
 
-    PCFF_HEADER pHeader = (PCOFF_HEADER)pCoffData;
+    PCOFF_HEADER pHeader = (PCOFF_HEADER)pCoffData;
     DWORD dwSectionCount = pHeader->NumberOfSections;
     *pdwSectionCount = dwSectionCount;
 
@@ -107,7 +107,7 @@ PCSTR async_coff_get_symbol_name(PBYTE pCoffData, DWORD dwCoffSize, DWORD dwSymb
         return NULL;
     }
 
-    PCFF_HEADER pHeader = (PCOFF_HEADER)pCoffData;
+    PCOFF_HEADER pHeader = (PCOFF_HEADER)pCoffData;
     PBYTE pSymbolTable = pCoffData + pHeader->PointerToSymbolTable;
 
     if ((DWORD)(pSymbolTable - pCoffData) >= dwCoffSize) {
@@ -121,7 +121,7 @@ PCSTR async_coff_get_symbol_name(PBYTE pCoffData, DWORD dwCoffSize, DWORD dwSymb
         return NULL;
     }
 
-    PCFF_SYMBOL_TABLE_ENTRY pEntry = (PCFF_SYMBOL_TABLE_ENTRY)pSymbol;
+    PCOFF_SYMBOL_TABLE_ENTRY pEntry = (PCOFF_SYMBOL_TABLE_ENTRY)pSymbol;
 
     if (pEntry->Name.Zeroes == 0) {
         DWORD dwStringTableOffset = pHeader->PointerToSymbolTable + pHeader->NumberOfSymbols * dwSymbolSize;
@@ -142,7 +142,7 @@ PCOFF_SYMBOL_TABLE_ENTRY async_coff_get_symbol(PBYTE pCoffData, DWORD dwCoffSize
         return NULL;
     }
 
-    PCFF_HEADER pHeader = (PCOFF_HEADER)pCoffData;
+    PCOFF_HEADER pHeader = (PCOFF_HEADER)pCoffData;
     PBYTE pSymbolTable = pCoffData + pHeader->PointerToSymbolTable;
 
     if ((DWORD)(pSymbolTable - pCoffData) >= dwCoffSize) {
@@ -164,23 +164,23 @@ PVOID async_coff_resolve_symbol(PBYTE pCoffData, DWORD dwCoffSize, PCSTR pszSymb
         return NULL;
     }
 
-    PCFF_HEADER pHeader = (PCOFF_HEADER)pCoffData;
+    PCOFF_HEADER pHeader = (PCOFF_HEADER)pCoffData;
     DWORD dwSymbolCount = pHeader->NumberOfSymbols;
     PBYTE pSymbolTable = pCoffData + pHeader->PointerToSymbolTable;
 
     for (DWORD i = 0; i < dwSymbolCount; i++) {
         PCSTR pszName = async_coff_get_symbol_name(pCoffData, dwCoffSize, i);
         if (pszName && strcmp(pszName, pszSymbolName) == 0) {
-            PCFF_SYMBOL_TABLE_ENTRY pEntry = async_coff_get_symbol(pCoffData, dwCoffSize, i);
+            PCOFF_SYMBOL_TABLE_ENTRY pEntry = async_coff_get_symbol(pCoffData, dwCoffSize, i);
             if (pEntry && pEntry->SectionNumber > 0) {
-                PCFF_SECTION pSection = async_coff_get_section(pCoffData, dwCoffSize, pEntry->SectionNumber - 1);
+                PCOFF_SECTION pSection = async_coff_get_section(pCoffData, dwCoffSize, pEntry->SectionNumber - 1);
                 if (pSection) {
                     return pCoffData + pSection->PointerToRawData + pEntry->Value;
                 }
             }
         }
 
-        PCFF_SYMBOL_TABLE_ENTRY pEntry2 = async_coff_get_symbol(pCoffData, dwCoffSize, i);
+        PCOFF_SYMBOL_TABLE_ENTRY pEntry2 = async_coff_get_symbol(pCoffData, dwCoffSize, i);
         if (pEntry2) {
             i += pEntry2->NumberOfAuxSymbols;
         }
@@ -204,9 +204,9 @@ BOOL async_bof_patch_symbol(
         return FALSE;
     }
 
-    PCFF_HEADER pHeader = (PCOFF_HEADER)pCoffData;
+    PCOFF_HEADER pHeader = (PCOFF_HEADER)pCoffData;
     DWORD dwSectionCount = 0;
-    PCFF_SECTION pSections = async_coff_get_sections(pCoffData, dwCoffSize, &dwSectionCount);
+    PCOFF_SECTION pSections = async_coff_get_sections(pCoffData, dwCoffSize, &dwSectionCount);
 
     if (!pSections) {
         pResult->success = FALSE;
@@ -215,13 +215,13 @@ BOOL async_bof_patch_symbol(
     }
 
     for (DWORD s = 0; s < dwSectionCount; s++) {
-        PCFF_SECTION pSection = &pSections[s];
+        PCOFF_SECTION pSection = &pSections[s];
         if (pSection->PointerToRelocations == 0 || pSection->NumberOfRelocations == 0) {
             continue;
         }
 
         for (DWORD r = 0; r < pSection->NumberOfRelocations; r++) {
-            PCFF_RELOCATION pReloc = async_coff_get_relocation(pSection, r);
+            PCOFF_RELOCATION pReloc = async_coff_get_relocation(pSection, r);
             if (!pReloc) {
                 continue;
             }
@@ -285,6 +285,64 @@ BOOL async_bof_patch_imports(
     return async_bof_patch_symbol(pCoffData, dwCoffSize, szFullName, pNewFuncAddr, pResult);
 }
 
+static BOOL async_bof_save_original_address(
+    PBYTE pCoffData,
+    DWORD dwCoffSize,
+    PCSTR pszImportName,
+    PCSTR pszFuncName) {
+
+    PCOFF_HEADER pHeader = (PCOFF_HEADER)pCoffData;
+    DWORD dwSectionCount = pHeader->NumberOfSections;
+    DWORD dwOptHeaderSize = pHeader->SizeOfOptionalHeader;
+    PCOFF_SECTION pSections = (PCOFF_SECTION)(pCoffData + sizeof(COFF_HEADER) + dwOptHeaderSize);
+    if ((PBYTE)(pSections + dwSectionCount) > pCoffData + dwCoffSize) {
+        return FALSE;
+    }
+
+    for (DWORD s = 0; s < dwSectionCount; s++) {
+        PCOFF_SECTION pSection = &pSections[s];
+        if (pSection->PointerToRelocations == 0 || pSection->NumberOfRelocations == 0) {
+            continue;
+        }
+
+        for (DWORD r = 0; r < pSection->NumberOfRelocations; r++) {
+            PCOFF_RELOCATION pReloc = async_coff_get_relocation(pSection, r);
+            if (!pReloc) continue;
+
+            if (pReloc->SymbolTableIndex >= pHeader->NumberOfSymbols) continue;
+
+            PCSTR pszRelocName = async_coff_get_symbol_name(pCoffData, dwCoffSize, pReloc->SymbolTableIndex);
+            if (!pszRelocName || strcmp(pszRelocName, pszImportName) != 0) continue;
+
+            PBYTE pTargetAddr = pCoffData + pSection->PointerToRawData + pReloc->VirtualAddress;
+            ULONG_PTR originalAddr = 0;
+
+            if (pReloc->Type == COFF_REL_TYPE_AMD64_RELATIVE) {
+                originalAddr = (ULONG_PTR)pTargetAddr + 4 + (INT32)(*(INT32*)pTargetAddr);
+            }
+            else if (pReloc->Type == COFF_REL_TYPE_AMD64_ADDR64) {
+                originalAddr = *(ULONG64*)pTargetAddr;
+            }
+            else {
+                continue;
+            }
+
+            if (!originalAddr) continue;
+
+            char origVarName[256];
+            snprintf(origVarName, sizeof(origVarName), "g_orig_%s", pszFuncName);
+
+            PVOID pOrigVar = async_coff_resolve_symbol(pCoffData, dwCoffSize, origVarName);
+            if (pOrigVar) {
+                *(ULONG_PTR*)pOrigVar = originalAddr;
+                return TRUE;
+            }
+            return FALSE;
+        }
+    }
+    return FALSE;
+}
+
 BOOL async_bof_patch_coff(
     PBYTE pCoffData,
     DWORD dwCoffSize,
@@ -296,13 +354,41 @@ BOOL async_bof_patch_coff(
 
     memset(pResult, 0, sizeof(ASYNC_PATCH_RESULT));
 
-    ASYNC_PATCH_RESULT tempResult = { 0 };
+    typedef struct {
+        const char* importName;
+        const char* proxyName;
+        const char* funcName;
+    } PATCH_ENTRY;
 
-    async_bof_patch_imports(pCoffData, dwCoffSize, "beacon", "BeaconPrintf", NULL, &tempResult);
+    static const PATCH_ENTRY entries[] = {
+        {"beacon$BeaconPrintf",         "proxy_BeaconPrintf",         "BeaconPrintf"},
+        {"beacon$BeaconOutput",         "proxy_BeaconOutput",         "BeaconOutput"},
+        {"beacon$BeaconWakeup",         "proxy_BeaconWakeup",         "BeaconWakeup"},
+        {"beacon$BeaconGetStopJobEvent","proxy_BeaconGetStopJobEvent","BeaconGetStopJobEvent"},
+        {"beacon$BeaconDataParse",      "proxy_BeaconDataParse",      "BeaconDataParse"},
+        {"beacon$BeaconDataInt",        "proxy_BeaconDataInt",        "BeaconDataInt"},
+        {"beacon$BeaconDataShort",      "proxy_BeaconDataShort",      "BeaconDataShort"},
+        {"beacon$BeaconDataLength",     "proxy_BeaconDataLength",     "BeaconDataLength"},
+        {"beacon$BeaconDataExtract",    "proxy_BeaconDataExtract",    "BeaconDataExtract"},
+    };
+
+    for (int i = 0; i < sizeof(entries) / sizeof(entries[0]); i++) {
+        PVOID pProxyAddr = async_coff_resolve_symbol(pCoffData, dwCoffSize, entries[i].proxyName);
+        if (!pProxyAddr) {
+            pResult->numFailed++;
+            continue;
+        }
+
+        async_bof_save_original_address(pCoffData, dwCoffSize,
+            entries[i].importName, entries[i].funcName);
+
+        ASYNC_PATCH_RESULT tmp = { 0 };
+        async_bof_patch_imports(pCoffData, dwCoffSize, "beacon",
+            entries[i].importName + 7, pProxyAddr, &tmp);
+        pResult->numPatched += tmp.numPatched;
+        pResult->numFailed += tmp.numFailed;
+    }
 
     pResult->success = TRUE;
-    pResult->numPatched = tempResult.numPatched;
-    pResult->numFailed = tempResult.numFailed;
-
     return TRUE;
 }

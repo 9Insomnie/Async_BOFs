@@ -1,0 +1,36 @@
+name: Build
+
+on:
+  push:
+    branches: [ main, master ]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: windows-2022
+    strategy:
+      matrix:
+        arch: [x64, Win32]
+        config: [Release, Debug]
+    defaults:
+      run:
+        working-directory: BOF-Template
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup Visual Studio dev environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch == 'x64' && 'x64' || 'x86' }}
+
+      - name: Build ${{ matrix.config }} ${{ matrix.arch }}
+        run: |
+          if "${{ matrix.config }}"=="Debug" (nmake /A all-debug) else (nmake /A all)
+        shell: cmd

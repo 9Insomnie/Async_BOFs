@@ -79,6 +79,9 @@ DECLSPEC_IMPORT void   BeaconOutput(int type, const char * data, int len);
 DECLSPEC_IMPORT void   BeaconPrintf(int type, const char * fmt, ...);
 DECLSPEC_IMPORT BOOL   BeaconDownload(const char * filename, const char* buffer, unsigned int length);
 
+/* Async BOF Functions */
+DECLSPEC_IMPORT void   BeaconWakeup();
+DECLSPEC_IMPORT HANDLE BeaconGetStopJobEvent();
 
 /* Token Functions */
 DECLSPEC_IMPORT BOOL   BeaconUseToken(HANDLE token);

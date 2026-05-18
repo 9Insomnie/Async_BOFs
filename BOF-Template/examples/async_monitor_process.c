@@ -212,7 +212,7 @@ void go(char* args, int len) {
         return;
     }
 
-    HANDLE hStop = async_get_stop_event();
+    HANDLE hStop = BeaconGetStopJobEvent();
     if (!hStop) {
         BeaconPrintf(CALLBACK_ERROR, "[!] No stop event available");
         return;

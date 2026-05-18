@@ -721,4 +721,17 @@ extern "C"
     VOID BeaconEnableBeaconGateMasking() {
         std::cerr << "Not implemented: " << __FUNCTION__ << std::endl;
     }
+
+    // Async BOF API
+    // Forward declarations from async/async_bof.h
+    extern void async_wakeup(void);
+    extern HANDLE async_get_stop_event(void);
+
+    void BeaconWakeup() {
+        async_wakeup();
+    }
+
+    HANDLE BeaconGetStopJobEvent() {
+        return async_get_stop_event();
+    }
 }
