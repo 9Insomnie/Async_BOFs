@@ -133,7 +133,6 @@ namespace bof {
              */
             void ResolveSyscalls(PSYSCALL_API syscalls) {
                 RESOLVE_ENTRY(syscalls->ntAllocateVirtualMemory, "NtAllocateVirtualMemory");
-                RESOLVE_ENTRY(syscalls->ntAllocateVirtualMemory, "NtAllocateVirtualMemory");
                 RESOLVE_ENTRY(syscalls->ntProtectVirtualMemory, "NtProtectVirtualMemory");
                 RESOLVE_ENTRY(syscalls->ntFreeVirtualMemory, "NtFreeVirtualMemory");
                 RESOLVE_ENTRY(syscalls->ntGetContextThread, "NtGetContextThread");

@@ -59,7 +59,14 @@ void async_vprintf(int type, const char* fmt, va_list args) {
         return;
     }
 
-    BeaconPrintf(type, fmt, args);
+    char msg_buf[4096];
+    int text_len = vsnprintf(msg_buf, sizeof(msg_buf) - 1, fmt, args);
+    if (text_len <= 0) {
+        return;
+    }
+    msg_buf[text_len] = '\0';
+
+    BeaconOutput(type, msg_buf, text_len);
 }
 
 void async_printf(int type, const char* fmt, ...) {
@@ -67,10 +74,17 @@ void async_printf(int type, const char* fmt, ...) {
         return;
     }
 
+    char msg_buf[4096];
     va_list args;
     va_start(args, fmt);
-    BeaconPrintf(type, fmt, args);
+    int text_len = vsnprintf(msg_buf, sizeof(msg_buf) - 1, fmt, args);
     va_end(args);
+    if (text_len <= 0) {
+        return;
+    }
+    msg_buf[text_len] = '\0';
+
+    BeaconOutput(type, msg_buf, text_len);
 }
 
 void async_notify_vprintf(int type, const char* fmt, va_list args) {
@@ -79,15 +93,16 @@ void async_notify_vprintf(int type, const char* fmt, va_list args) {
     }
 
     char msg_buf[4096];
-    int len = vsnprintf(msg_buf, sizeof(msg_buf) - 1, fmt, args);
-    if (len <= 0) {
+    int text_len = vsnprintf(msg_buf, sizeof(msg_buf) - 1, fmt, args);
+    if (text_len <= 0) {
         return;
     }
-    msg_buf[len] = '\0';
+    msg_buf[text_len] = '\0';
 
-    int msg_len = async_build_msg(msg_buf, sizeof(msg_buf), ASYNC_CMD_DATA, msg_buf, len);
+    char proto[8192];
+    int msg_len = async_build_msg(proto, sizeof(proto), ASYNC_CMD_DATA, msg_buf, text_len);
     if (msg_len > 0) {
-        BeaconPrintf(type, "%s", msg_buf);
+        BeaconOutput(CALLBACK_OUTPUT, proto, msg_len);
     }
 }
 
@@ -110,7 +125,7 @@ void async_wakeup(void) {
     char msg_buf[256];
     int msg_len = async_build_msg(msg_buf, sizeof(msg_buf), ASYNC_CMD_WAKEUP, NULL, 0);
     if (msg_len > 0) {
-        BeaconPrintf(CALLBACK_OUTPUT, "%s", msg_buf);
+        BeaconOutput(CALLBACK_OUTPUT, msg_buf, msg_len);
     }
 }
 
@@ -122,7 +137,7 @@ void async_stopping(void) {
     char msg_buf[256];
     int msg_len = async_build_msg(msg_buf, sizeof(msg_buf), ASYNC_CMD_STOPPING, NULL, 0);
     if (msg_len > 0) {
-        BeaconPrintf(CALLBACK_OUTPUT, "%s", msg_buf);
+        BeaconOutput(CALLBACK_OUTPUT, msg_buf, msg_len);
     }
 }
 
@@ -134,7 +149,7 @@ void async_stopped(void) {
     char msg_buf[256];
     int msg_len = async_build_msg(msg_buf, sizeof(msg_buf), ASYNC_CMD_STOPPED, NULL, 0);
     if (msg_len > 0) {
-        BeaconPrintf(CALLBACK_OUTPUT, "%s", msg_buf);
+        BeaconOutput(CALLBACK_OUTPUT, msg_buf, msg_len);
     }
 }
 

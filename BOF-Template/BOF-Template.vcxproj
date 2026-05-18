@@ -230,6 +230,7 @@
   <ItemGroup>
     <ClCompile Include="async\async_bof.c" />
     <ClCompile Include="async\async_bof_patch.c" />
+    <ClCompile Include="async\async_bof_proxy.cpp" />
     <ClCompile Include="async\async_protocol.c" />
     <ClCompile Include="base\mock_async.cpp" />
     <ClCompile Include="base\mock.cpp" />
@@ -245,6 +246,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)'=='UnitTest'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="examples\async_monitor_process.c">
+      <ExcludedFromBuild Condition="'$(Configuration)'=='Debug'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)'=='UnitTest'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="examples\async_portscan.c">
       <ExcludedFromBuild Condition="'$(Configuration)'=='Debug'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)'=='UnitTest'">true</ExcludedFromBuild>
     </ClCompile>

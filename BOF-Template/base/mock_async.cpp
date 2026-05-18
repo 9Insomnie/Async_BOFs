@@ -16,6 +16,7 @@ namespace bof {
         static std::vector<std::string> g_aMessages;
 
         void setMockStopEvent(HANDLE hEvent) {
+            g_hManualStopEvent = hEvent;
         }
 
         HANDLE getMockStopEvent(void) {
@@ -65,8 +66,13 @@ namespace bof {
             }
         }
 
-        void recordOutput(int type, const char* data, int len) {
-            bof::output::addEntry(type, data, len);
+        void scanCapturedOutputs(void) {
+            auto outputs = bof::output::getOutputs();
+            for (auto& entry : outputs) {
+                if (entry.output.size() > 13) {
+                    recordMessage(entry.output.data(), (int)entry.output.size());
+                }
+            }
         }
     }
 }
@@ -83,6 +89,8 @@ namespace bof {
         bof::mock::BofData args;
         args.pack(std::forward<T>(v)...);
         entry(args.get(), args.size());
+
+        bof::async_mock::scanCapturedOutputs();
         return bof::output::getOutputs();
     }
 
@@ -98,6 +106,8 @@ namespace bof {
         char stop_arg[64];
         int len = snprintf(stop_arg, sizeof(stop_arg), "\x1ASTOP\x1A%08X", (DWORD)(ULONG_PTR)hStopEvent);
         entry(stop_arg, len);
+
+        bof::async_mock::scanCapturedOutputs();
         return bof::output::getOutputs();
     }
 }
