@@ -76,7 +76,13 @@ ASYNC_STATUS async_parse_msg(const char* msg_buf, int msg_len, ASYNC_MESSAGE* ou
     return ASYNC_STATUS_OK;
 }
 
-int async_parse_handle_from_args(char* args, int args_len) {
+static int is_hex_digit(char c) {
+    return (c >= '0' && c <= '9') ||
+           (c >= 'a' && c <= 'f') ||
+           (c >= 'A' && c <= 'F');
+}
+
+ULONG_PTR async_parse_handle_from_args(char* args, int args_len) {
     if (!args || args_len < 20) {
         return 0;
     }
@@ -86,20 +92,32 @@ int async_parse_handle_from_args(char* args, int args_len) {
 
     for (int i = 0; i <= args_len - prefix_len - 4; i++) {
         if (memcmp(args + i, prefix, prefix_len) == 0) {
-            int handle_val = 0;
+            ULONG_PTR handle_val = 0;
             int offset = i + prefix_len;
+            int digits = 0;
+
+            if (offset + 1 < args_len &&
+                args[offset] == '0' &&
+                (args[offset + 1] == 'x' || args[offset + 1] == 'X')) {
+                offset += 2;
+            }
 
             for (int j = 0; j < 16 && offset + j < args_len; j++) {
                 char c = args[offset + j];
                 if (c >= '0' && c <= '9') {
-                    handle_val = handle_val * 16 + (c - '0');
+                    handle_val = handle_val * 16 + (ULONG_PTR)(c - '0');
                 } else if (c >= 'a' && c <= 'f') {
-                    handle_val = handle_val * 16 + (c - 'a' + 10);
+                    handle_val = handle_val * 16 + (ULONG_PTR)(c - 'a' + 10);
                 } else if (c >= 'A' && c <= 'F') {
-                    handle_val = handle_val * 16 + (c - 'A' + 10);
+                    handle_val = handle_val * 16 + (ULONG_PTR)(c - 'A' + 10);
                 } else {
                     break;
                 }
+                digits++;
+            }
+
+            if (digits == 0) {
+                continue;
             }
 
             return handle_val;
@@ -107,6 +125,40 @@ int async_parse_handle_from_args(char* args, int args_len) {
     }
 
     return 0;
+}
+
+char* async_get_args(char* args, int args_len, int* out_len) {
+    if (!args || !out_len || args_len < 20) {
+        return NULL;
+    }
+
+    const char* prefix = ASYNC_ARGS_PREFIX;
+    int prefix_len = (int)strlen(prefix);
+
+    for (int i = 0; i <= args_len - prefix_len - 4; i++) {
+        if (memcmp(args + i, prefix, prefix_len) == 0) {
+            int offset = i + prefix_len;
+
+            if (offset + 1 < args_len &&
+                args[offset] == '0' &&
+                (args[offset + 1] == 'x' || args[offset + 1] == 'X')) {
+                offset += 2;
+            }
+
+            while (offset < args_len && is_hex_digit(args[offset])) {
+                offset++;
+            }
+
+            if (offset < args_len && args[offset] == ASYNC_ARGS_TERMINATOR[0]) {
+                offset++;
+            }
+
+            *out_len = args_len - offset;
+            return args + offset;
+        }
+    }
+
+    return NULL;
 }
 
 int async_is_async_message(const char* data, int len) {

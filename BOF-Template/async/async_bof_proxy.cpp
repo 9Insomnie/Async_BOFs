@@ -1,5 +1,8 @@
 #include "async_bof.h"
 #include "async_protocol.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdarg.h>
 
 extern "C" {
 #include "..\beacon.h"

@@ -1,5 +1,5 @@
 #include <Windows.h>
-#include <winuser.h>
+#include <winternl.h>
 #include "..\async\async_bof.h"
 
 #ifdef _DEBUG
@@ -7,56 +7,27 @@
 #define DECLSPEC_IMPORT
 #endif
 
+#ifdef __cplusplus
 extern "C" {
+#endif
 #include "..\beacon.h"
+#ifdef __cplusplus
 }
-
-typedef enum _SYSTEM_INFORMATION_CLASS {
-    SystemProcessInformation = 5
-} SYSTEM_INFORMATION_CLASS;
+#endif
 
 typedef struct _SYSTEM_PROCESS_INFO {
     ULONG NextEntryOffset;
     ULONG NumberOfThreads;
     LARGE_INTEGER WorkingSetPrivateSize;
     ULONG HardFaultCount;
-    ULONG NumberOfTotalThreads;
-    ULONG AccessKey;
-    LONGLONG UniqueProcessId;
-    ULONGLONG CommitSize;
-    LONGLONG TotalCycleTime;
-    ULONGLONG UserCycleTime;
-    ULONGLONG Signature;
+    ULONG NumberOfThreadsHighWatermark;
+    ULONGLONG CycleTime;
     LARGE_INTEGER CreateTime;
-    ULONGLONG QuotaPeakPagedPoolUsage;
-    ULONGLONG QuotaPagedPoolUsage;
-    ULONGLONG QuotaPeakNonPagedPoolUsage;
-    ULONGLONG QuotaNonPagedPoolUsage;
-    LONGLONG PagefileUsage;
-    LONGLONG PeakPagefileUsage;
-    LONGLONG PrivatePageCount;
-    LARGE_INTEGER ModifiedPageCount;
-    ULONG ExecuteOptions;
-    UCHAR UniqueProcessDisableFState;
-    ULONG GdiCellps;
-    UCHAR Flags;
-    UCHAR NumbCells;
-    UCHAR CorePrmSystemDll;
-    ULONG DeleteFlags;
-    wchar_t ImageName[260];
+    LARGE_INTEGER UserTime;
+    LARGE_INTEGER KernelTime;
+    UNICODE_STRING ImageName;
     LONG BasePriority;
-    HANDLE UniqueProcessIdUnused;
-    HANDLE InheritedFromUniqueProcessId;
-    ULONG HandleCount;
-    ULONG SessionId;
-    ULONGLONG_PTR ptrVMC;
-    ULONGLONG_PTR ptrCommitCharge;
-    ULONGLONG_PTR PeakMemory;
-    ULONGLONG_ptr PsMAfreeSystemMemory;
-    ULONGLONG_ptr pszPrototypeOsVersion;
-    ULONG_PTR ThreadArrayHACK;
-    ULONG OverflowCounter;
-    ULONG_PTR ThreadList[1];
+    HANDLE UniqueProcessId;
 } SYSTEM_PROCESS_INFO, *PSYSTEM_PROCESS_INFO;
 
 typedef NTSTATUS(NTAPI* FN_NtQuerySystemInformation)(
@@ -170,8 +141,17 @@ static void enumerateProcesses(BOOL bAlertsOnly) {
 }
 
 void go(char* args, int len) {
+    async_init(args, len);
+
+    int user_len = 0;
+    char* user_args = async_get_args(args, len, &user_len);
+
     datap parser;
-    BeaconDataParse(&parser, args, len);
+    if (user_args && user_len > 0) {
+        BeaconDataParse(&parser, user_args, user_len);
+    } else {
+        BeaconDataParse(&parser, "", 0);
+    }
 
     wchar_t targetProcess[256] = { 0 };
     DWORD dwCheckIntervalMs = 2000;
@@ -181,7 +161,7 @@ void go(char* args, int len) {
     int initialLength = parser.length;
     if (initialLength > 0) {
         int procNameLen = 0;
-        char* procNameBuf = BeaconDataPtr(&parser, &procNameLen);
+        char* procNameBuf = BeaconDataExtract(&parser, &procNameLen);
         if (procNameBuf && procNameLen > 0) {
             wchar_t* wbuf = (wchar_t*)malloc(procNameLen * 2 + 2);
             if (wbuf) {
@@ -204,8 +184,6 @@ void go(char* args, int len) {
         int monitorOnceFlag = BeaconDataInt(&parser);
         bMonitorOnce = (monitorOnceFlag != 0);
     }
-
-    async_init(args, len);
 
     if (!async_is_initialized()) {
         BeaconPrintf(CALLBACK_ERROR, "[!] Async BOF not properly initialized. This BOF requires the async_bof.cna loader.");
@@ -287,3 +265,7 @@ void go(char* args, int len) {
     BeaconPrintf(CALLBACK_OUTPUT, "[*] Async Process Monitor stopped (polled %lu times)", dwPollCount);
     async_stopped();
 }
+
+#include "..\async\async_bof.c"
+#include "..\async\async_bof_patch.c"
+#include "..\async\async_protocol.c"

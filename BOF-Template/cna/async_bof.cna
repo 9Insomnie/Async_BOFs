@@ -247,17 +247,20 @@ sub async_bof_list_jobs {
     return $result;
 }
 
-# Pack stop event handle into args buffer
+# Pack stop event handle into args buffer.
+# Layout: ASYNC_ARGS_PREFIX + <hex handle> + ASYNC_ARGS_TERMINATOR + <user args>.
+# The terminator lets async_get_args() delimit the variable-length hex handle
+# so that user args beginning with hex characters are not swallowed.
 sub async_pack_args {
     local('$stop_event $args');
     $stop_event = $1;
     $args = $2;
 
     local('$hex_handle');
-    $hex_handle = toUpper(formatAddress($stop_event));
+    $hex_handle = toUpper(sprintf("%x", $stop_event));
 
     local('$packed');
-    $packed = "\x1ASTOP\x1A" . $hex_handle;
+    $packed = "\x1ASTOP\x1A" . $hex_handle . "\x1A";
 
     if ($args && strlen($args) > 0) {
         return $packed . $args;
@@ -322,7 +325,8 @@ alias async_bof {
     $data = strform($2);
 
     if (size(@_) < 2) {
-        berror($bid, "Usage: async_bof <bof_name> [args...]");
+        berror($bid, "Usage: async_bof <bof_name> [packed_args]");
+        berror($bid, "  packed_args: optional BOF arguments, e.g. bof_pack($bid, \"zi\", \"host\", 8080)");
         return;
     }
 
@@ -339,31 +343,24 @@ alias async_bof {
     $handle = $job['handle'];
 
     local('$packed_args');
-    $packed_args = async_pack_args($stop_event, '');
+    $args = size(@_) >= 3 ? $3 : '';
+    $packed_args = async_pack_args($stop_event, $args);
 
     local('$object');
     $object = exec($bof_name);
 
-    local('$bpid');
-    $bpid = beacon_info($bid)['pid'];
-
     local('$entry_func');
     $entry_func = "go";
 
-    local('$is64bit');
-    $is64bit = beacon_info($bid)['is64bit'];
+    # Run the BOF inside the beacon as an inline-execute job. This makes the
+    # beacon job stop event available via BeaconGetStopJobEvent() and keeps
+    # async wakeup/output handling in-process. (bloginject is a legacy API
+    # with a 6-arg signature including arch; beacon_inline_execute is the
+    # supported 4.x replacement and auto-handles architecture.)
+    beacon_inline_execute($bid, $object, $entry_func, $packed_args);
 
-    local('$inject_result');
-    $inject_result = bloginject($bid, 1, $object, $entry_func, $packed_args);
-
-    if ($inject_result) {
-        println("[*] ASYNC: Started async BOF '$bof_name' on beacon $bid");
-        println("[*] ASYNC: Job handle: $handle");
-    }
-    else {
-        berror($bid, "Failed to inject async BOF: $bof_name");
-        async_bof_free_job($bid, $handle);
-    }
+    println("[*] ASYNC: Started async BOF '$bof_name' on beacon $bid");
+    println("[*] ASYNC: Job handle: $handle");
 }
 
 # Command to list async jobs
@@ -445,6 +442,9 @@ popup beacon_bottom {
         add($menu, "Async Process Monitor");
         add($menu, "Async Port Scanner");
 
+        local('$arch_ext');
+        $arch_ext = barch($bid) eq "x86" ? "x86" : "x64";
+
         local('$selection');
         $selection = prompt_hash($menu, "Async BOF Actions", $null, $null, $null);
 
@@ -462,13 +462,13 @@ popup beacon_bottom {
             async_stop_all($bid);
         }
         else if ($selection eq "Async Logon Monitor") {
-            async_bof($bid, "async_monitor_logon.x64.o");
+            async_bof($bid, "async_monitor_logon. $+ $arch_ext $+ .o");
         }
         else if ($selection eq "Async Process Monitor") {
-            async_bof($bid, "async_monitor_process.x64.o");
+            async_bof($bid, "async_monitor_process. $+ $arch_ext $+ .o");
         }
         else if ($selection eq "Async Port Scanner") {
-            async_bof($bid, "async_portscan.x64.o");
+            async_bof($bid, "async_portscan. $+ $arch_ext $+ .o");
         }
     }
 }

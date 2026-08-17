@@ -1,6 +1,6 @@
-#include <Windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <Windows.h>
 #include "..\async\async_bof.h"
 
 #ifdef _DEBUG
@@ -8,9 +8,13 @@
 #define DECLSPEC_IMPORT
 #endif
 
+#ifdef __cplusplus
 extern "C" {
+#endif
 #include "..\beacon.h"
+#ifdef __cplusplus
 }
+#endif
 
 #pragma comment(lib, "ws2_32")
 
@@ -55,8 +59,15 @@ void go(char* args, int len) {
         return;
     }
 
+    int user_len = 0;
+    char* user_args = async_get_args(args, len, &user_len);
+
     datap parser;
-    BeaconDataParse(&parser, args, len);
+    if (user_args && user_len > 0) {
+        BeaconDataParse(&parser, user_args, user_len);
+    } else {
+        BeaconDataParse(&parser, "", 0);
+    }
 
     char* target = BeaconDataExtract(&parser, NULL);
     if (!target || strlen(target) == 0) {
@@ -119,3 +130,7 @@ void go(char* args, int len) {
     WSACleanup();
     async_stopped();
 }
+
+#include "..\async\async_bof.c"
+#include "..\async\async_bof_patch.c"
+#include "..\async\async_protocol.c"

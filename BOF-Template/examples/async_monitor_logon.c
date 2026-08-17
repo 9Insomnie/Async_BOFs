@@ -1,5 +1,5 @@
 #include <Windows.h>
-#include <winefs.h>
+#include <winevt.h>
 #include "..\async\async_bof.h"
 
 #ifdef _DEBUG
@@ -7,9 +7,13 @@
 #define DECLSPEC_IMPORT
 #endif
 
+#ifdef __cplusplus
 extern "C" {
+#endif
 #include "..\beacon.h"
+#ifdef __cplusplus
 }
+#endif
 
 #define EVT_LOGON_TYPE_INTERACTIVE        2
 #define EVT_LOGON_TYPE_NETWORK            3
@@ -32,7 +36,6 @@ static const wchar_t* g_wszLogonEventQuery =
     L"Event/System[EventID=4624 or EventID=4625]";
 
 static DWORD g_dwEventBufferSize = 0;
-static PEVT_HANDLE g_pEventRenderContext = NULL;
 
 static DWORD getEventDataAsDword(PEVT_VARIANT pEventData, DWORD dwIndex) {
     if (pEventData && (dwIndex < g_dwEventBufferSize)) {
@@ -71,20 +74,29 @@ static BOOL isAdminLogon(DWORD dwLogonType, DWORD dwAuthenticationPackage, const
     return FALSE;
 }
 
-static void closeSubscription(PEVT_HANDLE hSubscription) {
+static void closeSubscription(EVT_HANDLE hSubscription) {
     if (hSubscription) {
         EvtClose(hSubscription);
     }
 }
 
 void go(char* args, int len) {
-    datap parser;
-    BeaconDataParse(&parser, args, len);
+    async_init(args, len);
 
     short targetLogonType = 0;
     wchar_t targetUsername[256] = { 0 };
     BOOL monitorAllTypes = FALSE;
     BOOL monitorAdminOnly = TRUE;
+
+    int user_len = 0;
+    char* user_args = async_get_args(args, len, &user_len);
+
+    datap parser;
+    if (user_args && user_len > 0) {
+        BeaconDataParse(&parser, user_args, user_len);
+    } else {
+        BeaconDataParse(&parser, "", 0);
+    }
 
     if (parser.length > 0) {
         if (BeaconDataLength(&parser) >= 2) {
@@ -99,8 +111,6 @@ void go(char* args, int len) {
             monitorAllTypes = (allTypesFlag != 0);
         }
     }
-
-    async_init(args, len);
 
     if (!async_is_initialized()) {
         BeaconPrintf(CALLBACK_ERROR, "[!] Async BOF not properly initialized. This BOF requires the async_bof.cna loader.");
@@ -120,7 +130,7 @@ void go(char* args, int len) {
     }
     BeaconPrintf(CALLBACK_OUTPUT, "[*] Waiting for logon events... (Use 'async_stop' to stop)");
 
-    PEVT_HANDLE hSubscription = EvtSubscribe(
+    EVT_HANDLE hSubscription = EvtSubscribe(
         NULL,
         hStop,
         L"Security",
@@ -141,17 +151,24 @@ void go(char* args, int len) {
     PEVT_VARIANT pEventData = NULL;
 
     while (!async_should_stop(500)) {
-        EVT_HANDLE hEvent = EvtNext(hSubscription, 1000, 0, 0);
+        EVT_HANDLE aEvents[1] = { NULL };
+        DWORD dwEventCount = 0;
 
-        if (!hEvent) {
+        if (!EvtNext(hSubscription, 1, aEvents, 1000, 0, &dwEventCount)) {
             if (GetLastError() == ERROR_TIMEOUT) {
                 continue;
             }
             break;
         }
 
+        EVT_HANDLE hEvent = aEvents[0];
+        if (!hEvent) {
+            break;
+        }
+
         DWORD dwRequiredSize = 0;
-        EvtRender(NULL, hEvent, EvtRenderEventValues, 0, NULL, &dwRequiredSize);
+        DWORD dwPropertyCount = 0;
+        EvtRender(NULL, hEvent, EvtRenderEventValues, 0, NULL, &dwRequiredSize, &dwPropertyCount);
 
         if (dwRequiredSize == 0) {
             EvtClose(hEvent);
@@ -171,7 +188,8 @@ void go(char* args, int len) {
         }
 
         DWORD dwRenderedSize = 0;
-        if (!EvtRender(NULL, hEvent, EvtRenderEventValues, dwRequiredSize, pEventData, &dwRenderedSize)) {
+        DWORD dwRenderedPropertyCount = 0;
+        if (!EvtRender(NULL, hEvent, EvtRenderEventValues, dwRequiredSize, pEventData, &dwRenderedSize, &dwRenderedPropertyCount)) {
             EvtClose(hEvent);
             continue;
         }
@@ -275,3 +293,7 @@ void go(char* args, int len) {
     BeaconPrintf(CALLBACK_OUTPUT, "[*] Async Logon Monitor stopped");
     async_stopped();
 }
+
+#include "..\async\async_bof.c"
+#include "..\async\async_bof_patch.c"
+#include "..\async\async_protocol.c"
