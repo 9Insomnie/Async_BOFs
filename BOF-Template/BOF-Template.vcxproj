@@ -235,12 +235,14 @@
     <ClCompile Include="base\mock_async.cpp" />
     <ClCompile Include="base\mock.cpp" />
     <ClCompile Include="base\mock_syscalls.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='UnitTest|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='UnitTest|x64'">true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="bof.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\Users\User\source\repos\BOF-Template\x64\Debug\bof.exe</ExcludedFromBuild>
-    </ClCompile>
+    <ClCompile Include="bof.cpp" />
     <ClCompile Include="examples\async_monitor_logon.c">
       <ExcludedFromBuild Condition="'$(Configuration)'=='Debug'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)'=='UnitTest'">true</ExcludedFromBuild>

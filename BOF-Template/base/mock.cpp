@@ -361,7 +361,7 @@ namespace bof {
 
     std::vector<bof::output::OutputEntry> runMockedSleepMask(SLEEPMASK_FUNC sleepMaskFunc, const bof::profile::Stage& stage, const bof::mock::MockSleepMaskConfig& config) {
         BEACON_INFO beaconInfo = bof::mock::setupMockBeacon(stage);
-        FUNCTION_CALL functionCall = bof::mock::createFunctionCallStructure(Sleep, SLEEP, TRUE, 1, config.sleepTimeMs);
+        FUNCTION_CALL functionCall = bof::mock::createFunctionCallStructure((PVOID)Sleep, SLEEP, TRUE, 1, config.sleepTimeMs);
         bof::mock::resolveMockUpSleepmaskLocation(beaconInfo);
         bof::mock::setBeaconInfo(beaconInfo);
 

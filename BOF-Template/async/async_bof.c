@@ -1,14 +1,19 @@
 #include "async_bof.h"
 #include "async_protocol.h"
+#include <stdio.h>
 
 #ifdef _DEBUG
 #undef DECLSPEC_IMPORT
 #define DECLSPEC_IMPORT
 #endif
 
+#ifdef __cplusplus
 extern "C" {
+#endif
 #include "..\beacon.h"
+#ifdef __cplusplus
 }
+#endif
 
 static volatile HANDLE g_hStopEvent = NULL;
 static volatile BOOL g_bInitialized = FALSE;
@@ -24,13 +29,13 @@ void async_init(char* args, int len) {
         return;
     }
 
-    int handle_val = async_parse_handle_from_args(args, len);
+    ULONG_PTR handle_val = async_parse_handle_from_args(args, len);
     if (handle_val == 0) {
         g_Status = ASYNC_STATUS_NO_STOP_EVENT;
         return;
     }
 
-    HANDLE hEvent = (HANDLE)(ULONG_PTR)handle_val;
+    HANDLE hEvent = (HANDLE)handle_val;
     if (hEvent == NULL || hEvent == INVALID_HANDLE_VALUE) {
         g_Status = ASYNC_STATUS_NO_STOP_EVENT;
         return;

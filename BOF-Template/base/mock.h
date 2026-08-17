@@ -1,3 +1,6 @@
+#ifndef _MOCK_H_
+#define _MOCK_H_
+
 #include <vector>
 #include <string>
 
@@ -297,3 +300,5 @@ namespace bof {
      */
     std::vector<bof::output::OutputEntry> runMockedBeaconGate(SLEEPMASK_FUNC sleepMaskFunc, PFUNCTION_CALL functionCall, const bof::profile::Stage& stage);
 }
+
+#endif
