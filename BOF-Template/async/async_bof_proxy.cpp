@@ -1,5 +1,8 @@
 #include "async_bof.h"
 #include "async_protocol.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdarg.h>
 
 extern "C" {
 #include "..\beacon.h"
@@ -38,14 +41,17 @@ extern "C" void proxy_BeaconPrintf(int type, const char* fmt, ...) {
     int len = vsnprintf(buf, sizeof(buf) - 1, fmt, args);
     va_end(args);
     if (len <= 0) return;
+    if (len >= (int)sizeof(buf)) {
+        len = (int)sizeof(buf) - 1;
+    }
     buf[len] = '\0';
 
     char proto[8192];
     int msg_len = async_build_msg(proto, sizeof(proto), ASYNC_CMD_DATA, buf, len);
     if (msg_len > 0) {
-        bprintf_t orig = (bprintf_t)g_orig_BeaconPrintf;
+        boutput_t orig = (boutput_t)g_orig_BeaconOutput;
         if (orig)
-            orig(CALLBACK_OUTPUT, "%s", proto);
+            orig(type, proto, msg_len);
     }
 }
 

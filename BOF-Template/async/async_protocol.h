@@ -1,6 +1,8 @@
 #ifndef _ASYNC_PROTOCOL_H_
 #define _ASYNC_PROTOCOL_H_
 
+#include <windows.h>
+
 #define ASYNC_PROTOCOL_MAGIC      "\x00ASYNCPROTO\x00"
 #define ASYNC_PROTOCOL_MAGIC_LEN 13
 
@@ -14,6 +16,7 @@
 #define ASYNC_SEPARATOR     "\x00"
 
 #define ASYNC_ARGS_PREFIX   "\x1ASTOP\x1A"
+#define ASYNC_ARGS_TERMINATOR "\x1A"
 
 typedef enum {
     ASYNC_STATUS_OK = 0,
@@ -30,14 +33,24 @@ typedef struct {
     int payload_len;
 } ASYNC_MESSAGE;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int async_build_msg(char* out_buf, int buf_size, const char* cmd, const char* payload, int payload_len);
 
 ASYNC_STATUS async_parse_msg(const char* msg_buf, int msg_len, ASYNC_MESSAGE* out_msg);
 
-int async_parse_handle_from_args(char* args, int args_len);
+ULONG_PTR async_parse_handle_from_args(char* args, int args_len);
+
+char* async_get_args(char* args, int args_len, int* out_len);
 
 int async_is_async_message(const char* data, int len);
 
 int async_extract_payload(const char* data, int len, char* out_payload, int out_size);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

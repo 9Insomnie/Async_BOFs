@@ -1,6 +1,6 @@
-#include <Windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <Windows.h>
 #include "..\async\async_bof.h"
 
 #ifdef _DEBUG
@@ -8,9 +8,13 @@
 #define DECLSPEC_IMPORT
 #endif
 
+#ifdef __cplusplus
 extern "C" {
+#endif
 #include "..\beacon.h"
+#ifdef __cplusplus
 }
+#endif
 
 #pragma comment(lib, "ws2_32")
 
@@ -24,7 +28,10 @@ static BOOL try_connect(const char* host, int port, int timeout_ms) {
     struct sockaddr_in addr = { 0 };
     addr.sin_family = AF_INET;
     addr.sin_port = htons((short)port);
-    inet_pton(AF_INET, host, &addr.sin_addr);
+    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
+        closesocket(sock);
+        return FALSE;
+    }
 
     connect(sock, (struct sockaddr*)&addr, sizeof(addr));
 
@@ -55,8 +62,15 @@ void go(char* args, int len) {
         return;
     }
 
+    int user_len = 0;
+    char* user_args = async_get_args(args, len, &user_len);
+
     datap parser;
-    BeaconDataParse(&parser, args, len);
+    if (user_args && user_len > 0) {
+        BeaconDataParse(&parser, user_args, user_len);
+    } else {
+        BeaconDataParse(&parser, "", 0);
+    }
 
     char* target = BeaconDataExtract(&parser, NULL);
     if (!target || strlen(target) == 0) {
@@ -78,6 +92,8 @@ void go(char* args, int len) {
 
     if (start_port < 1) start_port = 1;
     if (end_port > 65535) end_port = 65535;
+    if (timeout_ms < 0) timeout_ms = 0;
+    if (timeout_ms > 30000) timeout_ms = 30000;
     if (start_port > end_port) {
         BeaconPrintf(CALLBACK_ERROR, "[!] start_port must be <= end_port");
         return;
@@ -119,3 +135,7 @@ void go(char* args, int len) {
     WSACleanup();
     async_stopped();
 }
+
+#include "..\async\async_bof.c"
+#include "..\async\async_bof_patch.c"
+#include "..\async\async_protocol.c"

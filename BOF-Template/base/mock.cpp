@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cstdio>
+#include <cstdint>
 #include <vector>
 #include <algorithm>
 #include <utility>
@@ -291,6 +292,11 @@ namespace bof {
             functionCall.bMask = bMask;
             functionCall.numOfArgs = numOfArgs;
 
+            if (numOfArgs > MAX_BEACON_GATE_ARGUMENTS) {
+                functionCall.numOfArgs = MAX_BEACON_GATE_ARGUMENTS;
+                numOfArgs = MAX_BEACON_GATE_ARGUMENTS;
+            }
+
             /* Start parsing valist and copy over variadic arguments. */
             va_start(valist, numOfArgs);
             for (int i = 0; i < numOfArgs; i++)
@@ -345,7 +351,8 @@ namespace bof {
 
         void set(const char* data) {
             if (data) {
-                std::memcpy(custom, data, BEACON_USER_DATA_CUSTOM_SIZE);
+                std::strncpy(custom, data, BEACON_USER_DATA_CUSTOM_SIZE - 1);
+                custom[BEACON_USER_DATA_CUSTOM_SIZE - 1] = '\0';
             }
         }
     }
@@ -361,7 +368,7 @@ namespace bof {
 
     std::vector<bof::output::OutputEntry> runMockedSleepMask(SLEEPMASK_FUNC sleepMaskFunc, const bof::profile::Stage& stage, const bof::mock::MockSleepMaskConfig& config) {
         BEACON_INFO beaconInfo = bof::mock::setupMockBeacon(stage);
-        FUNCTION_CALL functionCall = bof::mock::createFunctionCallStructure(Sleep, SLEEP, TRUE, 1, config.sleepTimeMs);
+        FUNCTION_CALL functionCall = bof::mock::createFunctionCallStructure((PVOID)Sleep, SLEEP, TRUE, 1, config.sleepTimeMs);
         bof::mock::resolveMockUpSleepmaskLocation(beaconInfo);
         bof::mock::setBeaconInfo(beaconInfo);
 
@@ -450,6 +457,9 @@ extern "C"
     }
 
     int BeaconDataInt(datap *parser) {
+        if (parser->length < (int)sizeof(int)) {
+            return 0;
+        }
         int value = *(int *)(parser->buffer);
         parser->buffer += sizeof(int);
         parser->length -= sizeof(int);
@@ -457,6 +467,9 @@ extern "C"
     }
 
     short BeaconDataShort(datap *parser) {
+        if (parser->length < (int)sizeof(short)) {
+            return 0;
+        }
         short value = *(short *)(parser->buffer);
         parser->buffer += sizeof(short);
         parser->length -= sizeof(short);
@@ -469,8 +482,15 @@ extern "C"
 
     char *BeaconDataExtract(datap *parser, int *size) {
         int size_im = BeaconDataInt(parser);
+        if (size_im < 0 || size_im > parser->length) {
+            if (size) {
+                *size = 0;
+            }
+            return NULL;
+        }
         char *buff = parser->buffer;
         parser->buffer += size_im;
+        parser->length -= size_im;
         if (size)
         {
             *size = size_im;
@@ -496,9 +516,14 @@ extern "C"
     }
 
     void BeaconFormatAppend(formatp *format, const char *text, int len) {
-        memcpy(format->buffer, text, len);
-        format->buffer += len;
-        format->length -= len;
+        if (format->length < len) {
+            len = format->length;
+        }
+        if (len > 0) {
+            memcpy(format->buffer, text, len);
+            format->buffer += len;
+            format->length -= len;
+        }
     }
 
     void BeaconFormatPrintf(formatp *format, const char *fmt, ...) {
