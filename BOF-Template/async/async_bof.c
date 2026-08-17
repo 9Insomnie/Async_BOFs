@@ -69,6 +69,9 @@ void async_vprintf(int type, const char* fmt, va_list args) {
     if (text_len <= 0) {
         return;
     }
+    if (text_len >= (int)sizeof(msg_buf)) {
+        text_len = (int)sizeof(msg_buf) - 1;
+    }
     msg_buf[text_len] = '\0';
 
     BeaconOutput(type, msg_buf, text_len);
@@ -87,6 +90,9 @@ void async_printf(int type, const char* fmt, ...) {
     if (text_len <= 0) {
         return;
     }
+    if (text_len >= (int)sizeof(msg_buf)) {
+        text_len = (int)sizeof(msg_buf) - 1;
+    }
     msg_buf[text_len] = '\0';
 
     BeaconOutput(type, msg_buf, text_len);
@@ -101,6 +107,9 @@ void async_notify_vprintf(int type, const char* fmt, va_list args) {
     int text_len = vsnprintf(msg_buf, sizeof(msg_buf) - 1, fmt, args);
     if (text_len <= 0) {
         return;
+    }
+    if (text_len >= (int)sizeof(msg_buf)) {
+        text_len = (int)sizeof(msg_buf) - 1;
     }
     msg_buf[text_len] = '\0';
 

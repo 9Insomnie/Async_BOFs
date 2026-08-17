@@ -28,7 +28,10 @@ static BOOL try_connect(const char* host, int port, int timeout_ms) {
     struct sockaddr_in addr = { 0 };
     addr.sin_family = AF_INET;
     addr.sin_port = htons((short)port);
-    inet_pton(AF_INET, host, &addr.sin_addr);
+    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
+        closesocket(sock);
+        return FALSE;
+    }
 
     connect(sock, (struct sockaddr*)&addr, sizeof(addr));
 
@@ -89,6 +92,8 @@ void go(char* args, int len) {
 
     if (start_port < 1) start_port = 1;
     if (end_port > 65535) end_port = 65535;
+    if (timeout_ms < 0) timeout_ms = 0;
+    if (timeout_ms > 30000) timeout_ms = 30000;
     if (start_port > end_port) {
         BeaconPrintf(CALLBACK_ERROR, "[!] start_port must be <= end_port");
         return;

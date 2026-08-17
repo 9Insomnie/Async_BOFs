@@ -163,12 +163,15 @@ void go(char* args, int len) {
         int procNameLen = 0;
         char* procNameBuf = BeaconDataExtract(&parser, &procNameLen);
         if (procNameBuf && procNameLen > 0) {
-            wchar_t* wbuf = (wchar_t*)malloc(procNameLen * 2 + 2);
-            if (wbuf) {
-                MultiByteToWideChar(CP_ACP, 0, procNameBuf, procNameLen, wbuf, procNameLen * 2);
-                wbuf[procNameLen] = L'\0';
-                wcsncpy_s(targetProcess, 256, wbuf, 255);
-                free(wbuf);
+            int wcLen = MultiByteToWideChar(CP_ACP, 0, procNameBuf, procNameLen, NULL, 0);
+            if (wcLen > 0) {
+                wchar_t* wbuf = (wchar_t*)malloc((wcLen + 1) * sizeof(wchar_t));
+                if (wbuf) {
+                    MultiByteToWideChar(CP_ACP, 0, procNameBuf, procNameLen, wbuf, wcLen);
+                    wbuf[wcLen] = L'\0';
+                    wcsncpy_s(targetProcess, 256, wbuf, 255);
+                    free(wbuf);
+                }
             }
         }
     }

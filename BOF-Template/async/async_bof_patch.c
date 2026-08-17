@@ -43,6 +43,12 @@ PCOFF_SECTION async_coff_find_section(PBYTE pCoffData, DWORD dwCoffSize, PCSTR p
     PCOFF_HEADER pHeader = (PCOFF_HEADER)pCoffData;
     DWORD dwSectionCount = pHeader->NumberOfSections;
     DWORD dwOptHeaderSize = pHeader->SizeOfOptionalHeader;
+
+    if ((ULONG_PTR)sizeof(COFF_HEADER) + dwOptHeaderSize
+            + (ULONG_PTR)dwSectionCount * sizeof(COFF_SECTION) > dwCoffSize) {
+        return NULL;
+    }
+
     PBYTE pSectionTable = pCoffData + sizeof(COFF_HEADER) + dwOptHeaderSize;
 
     for (DWORD i = 0; i < dwSectionCount; i++) {
@@ -62,9 +68,15 @@ PCOFF_SECTION async_coff_get_sections(PBYTE pCoffData, DWORD dwCoffSize, PDWORD 
 
     PCOFF_HEADER pHeader = (PCOFF_HEADER)pCoffData;
     DWORD dwSectionCount = pHeader->NumberOfSections;
-    *pdwSectionCount = dwSectionCount;
-
     DWORD dwOptHeaderSize = pHeader->SizeOfOptionalHeader;
+
+    if ((ULONG_PTR)sizeof(COFF_HEADER) + dwOptHeaderSize
+            + (ULONG_PTR)dwSectionCount * sizeof(COFF_SECTION) > dwCoffSize) {
+        *pdwSectionCount = 0;
+        return NULL;
+    }
+
+    *pdwSectionCount = dwSectionCount;
     return (PCOFF_SECTION)(pCoffData + sizeof(COFF_HEADER) + dwOptHeaderSize);
 }
 
@@ -184,7 +196,10 @@ PVOID async_coff_resolve_symbol(PBYTE pCoffData, DWORD dwCoffSize, PCSTR pszSymb
             if (pEntry && pEntry->SectionNumber > 0) {
                 PCOFF_SECTION pSection = async_coff_get_section(pCoffData, dwCoffSize, pEntry->SectionNumber - 1);
                 if (pSection) {
-                    return pCoffData + pSection->PointerToRawData + pEntry->Value;
+                    ULONG_PTR dwDataAddr = (ULONG_PTR)pSection->PointerToRawData + pEntry->Value;
+                    if (dwDataAddr < (ULONG_PTR)dwCoffSize) {
+                        return pCoffData + dwDataAddr;
+                    }
                 }
             }
         }
@@ -247,6 +262,10 @@ BOOL async_bof_patch_symbol(
             if (pReloc->Type == COFF_REL_TYPE_AMD64_RELATIVE) {
                 PBYTE pTargetAddr = pCoffData + pSection->PointerToRawData + pReloc->VirtualAddress;
 
+                if ((ULONG_PTR)(pTargetAddr - pCoffData) + sizeof(INT32) > dwCoffSize) {
+                    continue;
+                }
+
                 INT64 distance = (INT64)((ULONG_PTR)pNewFuncAddr - (ULONG_PTR)pTargetAddr - 4);
 
                 *(INT32*)pTargetAddr = (INT32)distance;
@@ -257,6 +276,10 @@ BOOL async_bof_patch_symbol(
             }
             else if (pReloc->Type == COFF_REL_TYPE_AMD64_ADDR64) {
                 PBYTE pTargetAddr = pCoffData + pSection->PointerToRawData + pReloc->VirtualAddress;
+
+                if ((ULONG_PTR)(pTargetAddr - pCoffData) + sizeof(ULONG64) > dwCoffSize) {
+                    continue;
+                }
 
                 *(ULONG64*)pTargetAddr = (ULONG64)pNewFuncAddr;
 
@@ -325,6 +348,10 @@ static BOOL async_bof_save_original_address(
 
             PBYTE pTargetAddr = pCoffData + pSection->PointerToRawData + pReloc->VirtualAddress;
             ULONG_PTR originalAddr = 0;
+
+            if ((ULONG_PTR)(pTargetAddr - pCoffData) + sizeof(ULONG64) > dwCoffSize) {
+                continue;
+            }
 
             if (pReloc->Type == COFF_REL_TYPE_AMD64_RELATIVE) {
                 originalAddr = (ULONG_PTR)pTargetAddr + 4 + (INT32)(*(INT32*)pTargetAddr);

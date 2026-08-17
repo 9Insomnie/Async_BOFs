@@ -17,7 +17,6 @@ namespace bof {
         void triggerStopEvent(void);
         void reset(void);
         void recordMessage(const char* msg, int len);
-        void recordOutput(int type, const char* data, int len);
     }
 
     template <typename... T>

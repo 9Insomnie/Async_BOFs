@@ -347,7 +347,22 @@ alias async_bof {
     $packed_args = async_pack_args($stop_event, $args);
 
     local('$object');
-    $object = exec($bof_name);
+    $object = openf($bof_name);
+    if (!$object) {
+        berror($bid, "Unable to open BOF file '$bof_name'");
+        berror($bid, "Place the .o file on the teamserver (e.g. Cobalt Strike -> Scripts -> Load, or upload to the CWD) and pass its name, e.g. async_bof async_monitor_logon.x64.o");
+        async_bof_free_job($bid, $handle);
+        return;
+    }
+    local('$object_data');
+    $object_data = readb($object, -1);
+    closef($object);
+
+    if (!$object_data || strlen($object_data) == 0) {
+        berror($bid, "BOF file '$bof_name' is empty or unreadable");
+        async_bof_free_job($bid, $handle);
+        return;
+    }
 
     local('$entry_func');
     $entry_func = "go";
@@ -357,7 +372,7 @@ alias async_bof {
     # async wakeup/output handling in-process. (bloginject is a legacy API
     # with a 6-arg signature including arch; beacon_inline_execute is the
     # supported 4.x replacement and auto-handles architecture.)
-    beacon_inline_execute($bid, $object, $entry_func, $packed_args);
+    beacon_inline_execute($bid, $object_data, $entry_func, $packed_args);
 
     println("[*] ASYNC: Started async BOF '$bof_name' on beacon $bid");
     println("[*] ASYNC: Job handle: $handle");

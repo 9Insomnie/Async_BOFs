@@ -21,37 +21,8 @@ extern "C" {
 #define EVT_LOGON_TYPE_REMOTE_INTERACTIVE 10
 #define EVT_LOGON_TYPE_NEW_CREDENTIALS    11
 
-static const DWORD TARGET_LOGON_TYPES = 
-    (1 << EVT_LOGON_TYPE_INTERACTIVE) |
-    (1 << EVT_LOGON_TYPE_REMOTE_INTERACTIVE);
-
-static const DWORD MONITORED_EVENT_IDS[] = {
-    4624,
-    4625
-};
-
-#define NUM_TARGET_EVENTS (sizeof(MONITORED_EVENT_IDS) / sizeof(DWORD))
-
 static const wchar_t* g_wszLogonEventQuery = 
     L"Event/System[EventID=4624 or EventID=4625]";
-
-static DWORD g_dwEventBufferSize = 0;
-
-static DWORD getEventDataAsDword(PEVT_VARIANT pEventData, DWORD dwIndex) {
-    if (pEventData && (dwIndex < g_dwEventBufferSize)) {
-        return pEventData[dwIndex].UInt32Val;
-    }
-    return 0;
-}
-
-static const wchar_t* getEventDataAsString(PEVT_VARIANT pEventData, DWORD dwIndex) {
-    if (pEventData && (dwIndex < g_dwEventBufferSize)) {
-        if (pEventData[dwIndex].Type == EvtVarTypeString) {
-            return pEventData[dwIndex].StringVal;
-        }
-    }
-    return L"";
-}
 
 static BOOL isAdminLogon(DWORD dwLogonType, DWORD dwAuthenticationPackage, const wchar_t* wszTargetUsername) {
     if (wszTargetUsername && wcslen(wszTargetUsername) > 0) {
@@ -200,36 +171,33 @@ void go(char* args, int len) {
         wchar_t wszUsername[256] = { 0 };
         wchar_t wszDomain[256] = { 0 };
         wchar_t wszProcessName[256] = { 0 };
-        DWORD dwIpAddressLength = 0;
         wchar_t wszIpAddress[64] = { 0 };
 
-        if (dwRenderedSize >= 1) {
+        if (dwRenderedPropertyCount >= 2) {
             dwEventID = pEventData[1].UInt32Val;
         }
-        if (dwRenderedSize >= 5) {
+        if (dwRenderedPropertyCount >= 5) {
             dwLogonType = pEventData[4].UInt32Val;
         }
-        if (dwRenderedSize >= 6) {
+        if (dwRenderedPropertyCount >= 6) {
             dwAuthenticationPackage = pEventData[5].UInt32Val;
         }
-        if (dwRenderedSize >= 8) {
-            wcsncpy_s(wszUsername, 256, pEventData[7].StringVal ? pEventData[7].StringVal : L"", 255);
-        }
-        if (dwRenderedSize >= 9) {
-            wcsncpy_s(wszDomain, 256, pEventData[8].StringVal ? pEventData[8].StringVal : L"", 255);
-        }
-        if (dwRenderedSize >= 18) {
-            wcsncpy_s(wszProcessName, 256, pEventData[17].StringVal ? pEventData[17].StringVal : L"", 255);
-        }
-        if (dwRenderedSize >= 20) {
-            if (pEventData[19].Type == EvtVarTypeSid) {
+        if (dwRenderedPropertyCount >= 8) {
+            if (pEventData[7].Type == EvtVarTypeString && pEventData[7].StringVal) {
+                wcsncpy_s(wszUsername, 256, pEventData[7].StringVal, 255);
             }
         }
-        if (dwRenderedSize >= 21) {
-            if (pEventData[20].Type == EvtVarTypeSid) {
+        if (dwRenderedPropertyCount >= 9) {
+            if (pEventData[8].Type == EvtVarTypeString && pEventData[8].StringVal) {
+                wcsncpy_s(wszDomain, 256, pEventData[8].StringVal, 255);
             }
         }
-        if (dwRenderedSize >= 25) {
+        if (dwRenderedPropertyCount >= 18) {
+            if (pEventData[17].Type == EvtVarTypeString && pEventData[17].StringVal) {
+                wcsncpy_s(wszProcessName, 256, pEventData[17].StringVal, 255);
+            }
+        }
+        if (dwRenderedPropertyCount >= 25) {
             if (pEventData[24].Type == EvtVarTypeString && pEventData[24].StringVal) {
                 wcsncpy_s(wszIpAddress, 64, pEventData[24].StringVal, 63);
             }
