@@ -83,7 +83,7 @@ namespace bof {
             BOOL ResolveSyscallEntry(PSYSCALL_API_ENTRY entry, const char* funcName) {
                 // Resolve the NT function address
                 static HMODULE ntdll = LoadLibraryA("ntdll");
-                PVOID fnAddr = GetProcAddress(ntdll, funcName);
+                PVOID fnAddr = (PVOID)GetProcAddress(ntdll, funcName);
 
                 if (!fnAddr) {
                     return FALSE;
@@ -183,7 +183,7 @@ namespace bof {
              */
             BOOL ResolveNtdllFunc(PVOID* address, const char* funcName) {
                 static const HMODULE ntdll = LoadLibraryA("ntdll");
-                *address = GetProcAddress(ntdll, funcName);
+                *address = (PVOID)GetProcAddress(ntdll, funcName);
                 return *address != NULL;
             }
 

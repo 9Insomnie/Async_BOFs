@@ -96,7 +96,7 @@ namespace bof {
 
     template <>
     std::vector<bof::output::OutputEntry> runMockedAsync<HANDLE>(
-        void (*entry)(char*, int), HANDLE hStopEvent) {
+        void (*entry)(char*, int), HANDLE&& hStopEvent) {
         BEACON_INFO beaconInfo = bof::mock::setupMockBeacon(bof::profile::defaultStage);
         bof::mock::setBeaconInfo(beaconInfo);
         bof::output::reset();
@@ -104,7 +104,7 @@ namespace bof {
 
         bof::async_mock::setMockStopEvent(hStopEvent);
         char stop_arg[64];
-        int len = snprintf(stop_arg, sizeof(stop_arg), "\x1ASTOP\x1A%08X", (DWORD)(ULONG_PTR)hStopEvent);
+        int len = snprintf(stop_arg, sizeof(stop_arg), "\x1ASTOP\x1A%016I64X\x1A", (ULONGLONG)(ULONG_PTR)hStopEvent);
         entry(stop_arg, len);
 
         bof::async_mock::scanCapturedOutputs();

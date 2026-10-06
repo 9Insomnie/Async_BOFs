@@ -72,7 +72,7 @@ PCOFF_SECTION async_coff_find_section(PBYTE pCoffData, DWORD dwCoffSize, PCSTR p
 
 DWORD async_coff_get_relocation_count(PCOFF_SECTION pSection);
 
-PCOFF_RELOCATION async_coff_get_relocation(PCOFF_SECTION pSection, DWORD dwRelocIndex);
+PCOFF_RELOCATION async_coff_get_relocation(PBYTE pCoffData, DWORD dwCoffSize, PCOFF_SECTION pSection, DWORD dwRelocIndex);
 
 PCOFF_SECTION async_coff_get_sections(PBYTE pCoffData, DWORD dwCoffSize, PDWORD pdwSectionCount);
 
@@ -81,6 +81,8 @@ PCOFF_SYMBOL_TABLE_ENTRY async_coff_get_symbol(PBYTE pCoffData, DWORD dwCoffSize
 PCSTR async_coff_get_symbol_name(PBYTE pCoffData, DWORD dwCoffSize, DWORD dwSymbolIndex);
 
 PVOID async_coff_resolve_symbol(PBYTE pCoffData, DWORD dwCoffSize, PCSTR pszSymbolName);
+
+typedef PVOID (*ASYNC_PROXY_RESOLVER)(PCSTR pszProxyName);
 
 BOOL async_bof_patch_imports(
     PBYTE pCoffData,
@@ -100,6 +102,7 @@ BOOL async_bof_patch_symbol(
 BOOL async_bof_patch_coff(
     PBYTE pCoffData,
     DWORD dwCoffSize,
+    ASYNC_PROXY_RESOLVER pfnResolveProxy,
     PASYNC_PATCH_RESULT pResult);
 
 #endif

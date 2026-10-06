@@ -1,5 +1,6 @@
 #include "async_bof_patch.h"
 #include <string.h>
+#include <stdio.h>
 
 DWORD async_coff_get_section_count(PBYTE pCoffData, DWORD dwCoffSize) {
     if (!pCoffData || dwCoffSize < sizeof(COFF_HEADER)) {
@@ -42,6 +43,12 @@ PCOFF_SECTION async_coff_find_section(PBYTE pCoffData, DWORD dwCoffSize, PCSTR p
     PCOFF_HEADER pHeader = (PCOFF_HEADER)pCoffData;
     DWORD dwSectionCount = pHeader->NumberOfSections;
     DWORD dwOptHeaderSize = pHeader->SizeOfOptionalHeader;
+
+    if ((ULONG_PTR)sizeof(COFF_HEADER) + dwOptHeaderSize
+            + (ULONG_PTR)dwSectionCount * sizeof(COFF_SECTION) > dwCoffSize) {
+        return NULL;
+    }
+
     PBYTE pSectionTable = pCoffData + sizeof(COFF_HEADER) + dwOptHeaderSize;
 
     for (DWORD i = 0; i < dwSectionCount; i++) {
@@ -61,9 +68,15 @@ PCOFF_SECTION async_coff_get_sections(PBYTE pCoffData, DWORD dwCoffSize, PDWORD 
 
     PCOFF_HEADER pHeader = (PCOFF_HEADER)pCoffData;
     DWORD dwSectionCount = pHeader->NumberOfSections;
-    *pdwSectionCount = dwSectionCount;
-
     DWORD dwOptHeaderSize = pHeader->SizeOfOptionalHeader;
+
+    if ((ULONG_PTR)sizeof(COFF_HEADER) + dwOptHeaderSize
+            + (ULONG_PTR)dwSectionCount * sizeof(COFF_SECTION) > dwCoffSize) {
+        *pdwSectionCount = 0;
+        return NULL;
+    }
+
+    *pdwSectionCount = dwSectionCount;
     return (PCOFF_SECTION)(pCoffData + sizeof(COFF_HEADER) + dwOptHeaderSize);
 }
 
@@ -74,13 +87,21 @@ DWORD async_coff_get_relocation_count(PCOFF_SECTION pSection) {
     return pSection->NumberOfRelocations;
 }
 
-PCOFF_RELOCATION async_coff_get_relocation(PCOFF_SECTION pSection, DWORD dwRelocIndex) {
-    if (!pSection || dwRelocIndex >= pSection->NumberOfRelocations) {
+PCOFF_RELOCATION async_coff_get_relocation(PBYTE pCoffData, DWORD dwCoffSize, PCOFF_SECTION pSection, DWORD dwRelocIndex) {
+    if (!pCoffData || !pSection || dwRelocIndex >= pSection->NumberOfRelocations) {
         return NULL;
     }
 
-    PBYTE pRelocTable = (PBYTE)pSection + sizeof(COFF_SECTION);
-    return (PCOFF_RELOCATION)(pRelocTable + dwRelocIndex * sizeof(COFF_RELOCATION));
+    if (pSection->PointerToRelocations == 0) {
+        return NULL;
+    }
+
+    DWORD dwOffset = pSection->PointerToRelocations + dwRelocIndex * sizeof(COFF_RELOCATION);
+    if (dwOffset + sizeof(COFF_RELOCATION) > dwCoffSize) {
+        return NULL;
+    }
+
+    return (PCOFF_RELOCATION)(pCoffData + dwOffset);
 }
 
 static void async_coff_get_string_at_offset(PBYTE pCoffData, DWORD dwCoffSize, DWORD dwOffset, char* outBuf, DWORD dwBufSize) {
@@ -123,7 +144,7 @@ PCSTR async_coff_get_symbol_name(PBYTE pCoffData, DWORD dwCoffSize, DWORD dwSymb
 
     PCOFF_SYMBOL_TABLE_ENTRY pEntry = (PCOFF_SYMBOL_TABLE_ENTRY)pSymbol;
 
-    if (pEntry->Name.Zeroes == 0) {
+    if (pEntry->Name.LongName.Zeroes == 0) {
         DWORD dwStringTableOffset = pHeader->PointerToSymbolTable + pHeader->NumberOfSymbols * dwSymbolSize;
         DWORD dwStringOffset = pEntry->Name.LongName.Offset;
 
@@ -175,7 +196,10 @@ PVOID async_coff_resolve_symbol(PBYTE pCoffData, DWORD dwCoffSize, PCSTR pszSymb
             if (pEntry && pEntry->SectionNumber > 0) {
                 PCOFF_SECTION pSection = async_coff_get_section(pCoffData, dwCoffSize, pEntry->SectionNumber - 1);
                 if (pSection) {
-                    return pCoffData + pSection->PointerToRawData + pEntry->Value;
+                    ULONG_PTR dwDataAddr = (ULONG_PTR)pSection->PointerToRawData + pEntry->Value;
+                    if (dwDataAddr < (ULONG_PTR)dwCoffSize) {
+                        return pCoffData + dwDataAddr;
+                    }
                 }
             }
         }
@@ -221,7 +245,7 @@ BOOL async_bof_patch_symbol(
         }
 
         for (DWORD r = 0; r < pSection->NumberOfRelocations; r++) {
-            PCOFF_RELOCATION pReloc = async_coff_get_relocation(pSection, r);
+            PCOFF_RELOCATION pReloc = async_coff_get_relocation(pCoffData, dwCoffSize, pSection, r);
             if (!pReloc) {
                 continue;
             }
@@ -238,6 +262,10 @@ BOOL async_bof_patch_symbol(
             if (pReloc->Type == COFF_REL_TYPE_AMD64_RELATIVE) {
                 PBYTE pTargetAddr = pCoffData + pSection->PointerToRawData + pReloc->VirtualAddress;
 
+                if ((ULONG_PTR)(pTargetAddr - pCoffData) + sizeof(INT32) > dwCoffSize) {
+                    continue;
+                }
+
                 INT64 distance = (INT64)((ULONG_PTR)pNewFuncAddr - (ULONG_PTR)pTargetAddr - 4);
 
                 *(INT32*)pTargetAddr = (INT32)distance;
@@ -248,6 +276,10 @@ BOOL async_bof_patch_symbol(
             }
             else if (pReloc->Type == COFF_REL_TYPE_AMD64_ADDR64) {
                 PBYTE pTargetAddr = pCoffData + pSection->PointerToRawData + pReloc->VirtualAddress;
+
+                if ((ULONG_PTR)(pTargetAddr - pCoffData) + sizeof(ULONG64) > dwCoffSize) {
+                    continue;
+                }
 
                 *(ULONG64*)pTargetAddr = (ULONG64)pNewFuncAddr;
 
@@ -306,7 +338,7 @@ static BOOL async_bof_save_original_address(
         }
 
         for (DWORD r = 0; r < pSection->NumberOfRelocations; r++) {
-            PCOFF_RELOCATION pReloc = async_coff_get_relocation(pSection, r);
+            PCOFF_RELOCATION pReloc = async_coff_get_relocation(pCoffData, dwCoffSize, pSection, r);
             if (!pReloc) continue;
 
             if (pReloc->SymbolTableIndex >= pHeader->NumberOfSymbols) continue;
@@ -316,6 +348,10 @@ static BOOL async_bof_save_original_address(
 
             PBYTE pTargetAddr = pCoffData + pSection->PointerToRawData + pReloc->VirtualAddress;
             ULONG_PTR originalAddr = 0;
+
+            if ((ULONG_PTR)(pTargetAddr - pCoffData) + sizeof(ULONG64) > dwCoffSize) {
+                continue;
+            }
 
             if (pReloc->Type == COFF_REL_TYPE_AMD64_RELATIVE) {
                 originalAddr = (ULONG_PTR)pTargetAddr + 4 + (INT32)(*(INT32*)pTargetAddr);
@@ -346,6 +382,7 @@ static BOOL async_bof_save_original_address(
 BOOL async_bof_patch_coff(
     PBYTE pCoffData,
     DWORD dwCoffSize,
+    ASYNC_PROXY_RESOLVER pfnResolveProxy,
     PASYNC_PATCH_RESULT pResult) {
 
     if (!pCoffData || !pResult) {
@@ -373,7 +410,9 @@ BOOL async_bof_patch_coff(
     };
 
     for (int i = 0; i < sizeof(entries) / sizeof(entries[0]); i++) {
-        PVOID pProxyAddr = async_coff_resolve_symbol(pCoffData, dwCoffSize, entries[i].proxyName);
+        PVOID pProxyAddr = pfnResolveProxy
+            ? pfnResolveProxy(entries[i].proxyName)
+            : async_coff_resolve_symbol(pCoffData, dwCoffSize, entries[i].proxyName);
         if (!pProxyAddr) {
             pResult->numFailed++;
             continue;
@@ -389,6 +428,14 @@ BOOL async_bof_patch_coff(
         pResult->numFailed += tmp.numFailed;
     }
 
-    pResult->success = TRUE;
-    return TRUE;
+    if (pResult->numFailed == 0) {
+        pResult->success = TRUE;
+    }
+    else {
+        snprintf(pResult->errorMsg, sizeof(pResult->errorMsg),
+            "Failed to patch %lu import(s); ensure proxy functions are resolvable",
+            pResult->numFailed);
+    }
+
+    return pResult->success;
 }

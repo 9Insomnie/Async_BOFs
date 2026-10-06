@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <string>
 #include <vector>
+#include "mock.h"
 #include "../async/async_protocol.h"
 
 namespace bof {
@@ -16,7 +17,6 @@ namespace bof {
         void triggerStopEvent(void);
         void reset(void);
         void recordMessage(const char* msg, int len);
-        void recordOutput(int type, const char* data, int len);
     }
 
     template <typename... T>
@@ -25,7 +25,7 @@ namespace bof {
 
     template <>
     std::vector<bof::output::OutputEntry> runMockedAsync<HANDLE>(
-        void (*entry)(char*, int), HANDLE hStopEvent);
+        void (*entry)(char*, int), HANDLE&& hStopEvent);
 }
 
 extern "C" {

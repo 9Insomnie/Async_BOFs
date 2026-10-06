@@ -362,7 +362,10 @@ async_bof_patch_imports(
 );
 
 // Auto-patch all Beacon imports / 自动修补所有 Beacon 导入
-async_bof_patch_coff(pCoffData, dwCoffSize, &result);
+// proxy_* functions are not compiled into the COFF (see above), so a
+// resolver callback that maps proxy names to addresses is required.
+// / proxy_* 函数不会编入 COFF（见上文），因此需要回调解析器提供 proxy 地址。
+async_bof_patch_coff(pCoffData, dwCoffSize, resolveProxyFunc, &result);
 ```
 
 ---
